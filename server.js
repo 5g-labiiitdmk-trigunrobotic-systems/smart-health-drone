@@ -23,7 +23,7 @@ for (const interfaceName in interfaces) {
 
 const io = new Server(server, {
     cors: {
-        origin: ["https://testfile6.onrender.com", "http://localhost:3000", "http://localhost:8080"],
+        origin: ["https://testfile6.onrender.com", "http://localhost:3000", "http://localhost:8080","https://drone-ztxx.onrender.com/"],
         // Allow all origins for multi-device testing
         methods: ["GET", "POST"],
         credentials: true,
