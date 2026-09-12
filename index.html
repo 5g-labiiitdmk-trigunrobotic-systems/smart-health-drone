@@ -693,7 +693,7 @@
     transports: ['websocket', 'polling'],
     secure: true
 });*/
-	const socket = io('https://drone-ztxx.onrender.com/', {
+	const socket = io({
     path: '/socket.io',
     transports: ['websocket', 'polling'],
     secure: true
