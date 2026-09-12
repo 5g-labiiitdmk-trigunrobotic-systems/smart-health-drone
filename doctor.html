@@ -362,7 +362,7 @@
         let ambulanceMarker, droneMarker, droneAmbulanceLine;
         const KURNOOL_COORDS = [15.8281, 78.0373]; // Default center for Kurnool
         let zp; // ZegoCloud instance
-        const socket = io('https://testfile6.onrender.com'); // Connect to the Socket.IO server
+        const socket = io(); // Connect to the Socket.IO server
 
         // Get DOM elements
         const clearConsoleBtn = document.getElementById('clear-console');
