@@ -270,6 +270,10 @@
             border: none !important;
         }
 
+        .pending-request-card {
+            min-width: 220px;
+        }
+
         /* Media Queries for responsiveness */
         @media (max-width: 1024px) {
             .main-container {
@@ -297,6 +301,37 @@
             header {
                 flex-direction: column;
                 gap: 10px;
+                align-items: flex-start;
+            }
+
+            .logo-line-1 {
+                font-size: 1rem;
+            }
+
+            .logo-line-2 {
+                font-size: 1.3rem;
+            }
+
+            .logo-line-3 {
+                font-size: 0.75rem;
+            }
+
+            .pending-request-card {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-line-1, .logo-line-1-sub, .logo-line-3 {
+                display: none; /* Free up space on very small screens */
+            }
+
+            .map-section {
+                height: 300px;
+            }
+
+            .console-section {
+                height: 160px;
             }
         }
     </style>
@@ -319,6 +354,20 @@
             </div>
         </div>
     </header>
+
+    <section class="pending-requests-section" style="
+        background: rgba(29, 53, 87, 0.7);
+        border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+        padding: 15px 20px;
+    ">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
+            <i class="fas fa-bell" style="color: var(--warning);"></i>
+            <strong>Pending Emergency Requests</strong>
+        </div>
+        <div id="pending-requests-list" style="display:flex; flex-wrap:wrap; gap:12px;">
+            <p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>
+        </div>
+    </section>
 
     <div class="main-container">
         <section class="map-section">
@@ -354,7 +403,7 @@
     </section>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
     <script>
         // Initialize variables
@@ -373,8 +422,17 @@
 
         // Retrieve connection info from localStorage
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
-        let doctorName = "Doctor";
+        // Prefer the actually logged-in doctor's name (set at login on the
+        // portal page) so Accept-a-call works without going through the old
+        // manual "connect" dropdown flow first.
+        let doctorName = localStorage.getItem('myName') || "Doctor";
         let droneName = "Ambulance Drone";
+        // Unique per-pairing room, assigned by the server when this doctor
+        // connected to a drone from the portal page. Falls back to a
+        // per-tab random id so testing without going through the portal
+        // doesn't accidentally join a shared/global room.
+        let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+        const myUserId = localStorage.getItem('myUserId') || null;
 
         if (currentConnection && currentConnection.role === 'doctor') {
             doctorName = currentConnection.doctorName;
@@ -429,11 +487,70 @@
         
 
         // --- Socket.IO for GPS Sync ---
+        // Joins this pairing's own room instead of a hardcoded global one, so
+        // GPS data from other simultaneous drone/doctor pairs never crosses over.
         socket.on('connect', () => {
             addLogEntry('Connected to signaling server.', 'info');
-            socket.emit('join', '108'); // Doctor joins the '108' room
-            addLogEntry('Joined room: 108', 'info');
+            socket.emit('join', myRoomId);
+            addLogEntry(`Joined room: ${myRoomId}`, 'info');
+            if (myUserId) {
+                socket.emit('identify', { userId: myUserId, role: 'doctor' });
+            }
         });
+
+        // --- Call Assignment (Feature #3) ---
+        // Rather than any doctor being able to join any drone's call, an
+        // ambulance/drone's emergency request sits in a server-side queue
+        // until a specific doctor clicks Accept here, at which point only
+        // that doctor is scoped into the drone's unique room.
+        const pendingRequestsList = document.getElementById('pending-requests-list');
+        let pendingRequests = [];
+
+        socket.on('pendingRequestsUpdated', (requests) => {
+            pendingRequests = requests || [];
+            renderPendingRequests();
+        });
+
+        function renderPendingRequests() {
+            if (!pendingRequests.length) {
+                pendingRequestsList.innerHTML = '<p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>';
+                return;
+            }
+            pendingRequestsList.innerHTML = pendingRequests.map(r => `
+                <div class="pending-request-card" style="background: rgba(230,57,70,0.15); border: 1px solid var(--primary); border-radius: 10px; padding: 10px 15px;">
+                    <div><strong>${r.operatorName}</strong></div>
+                    <div style="font-size: 0.8rem; color: var(--accent); margin-bottom: 8px;">
+                        Requested ${new Date(r.timestamp).toLocaleTimeString()}
+                    </div>
+                    <button class="btn" data-accept="${r.roomId}" style="background: var(--success); padding: 6px 14px; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                        <i class="fas fa-check"></i> Accept
+                    </button>
+                </div>
+            `).join('');
+
+            pendingRequestsList.querySelectorAll('[data-accept]').forEach(btn => {
+                btn.addEventListener('click', () => acceptRequest(btn.getAttribute('data-accept')));
+            });
+        }
+
+        function acceptRequest(roomId) {
+            socket.emit('acceptRequest', { roomId, doctorUserId: myUserId, doctorName }, (result) => {
+                if (result && result.error) {
+                    alert(result.error);
+                    return;
+                }
+                const connection = result.connection;
+                myRoomId = connection.roomId;
+                localStorage.setItem('currentConnection', JSON.stringify(connection));
+                socket.emit('join', myRoomId);
+
+                droneName = connection.operatorName;
+                doctorHeaderName.textContent = `${doctorName} Interface`;
+                videoCallTitleText.textContent = `Video Call with ${droneName}`;
+
+                addLogEntry(`Accepted emergency call from ${droneName}. Now receiving their live GPS and video feed.`, 'success');
+            });
+        }
 
         socket.on('droneData', (data) => {
             let ambulanceCoords = KURNOOL_COORDS;
@@ -461,20 +578,33 @@
         async function startCall() {
             addLogEntry('Joining emergency video call...', 'info');
 
-            const roomID = '108_emergency'; // Same room ID as drone
+            // Unique room per drone/doctor pairing instead of a hardcoded
+            // '108_emergency' shared by every pair.
+            const roomID = `emergency_${myRoomId}`;
             const userID = 'doctor_' + Math.floor(Math.random() * 10000);
             const userName = doctorName; // Use the retrieved doctor name
-            const appID = 1456107197;
-            const serverSecret = "0bf6256589a4b592bb50a35ef1c8b59f";
-            
-            const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-                appID, 
-                serverSecret, 
-                roomID, 
-                userID, 
-                userName
-            );
-            
+
+            let kitToken;
+            try {
+                const res = await fetch('/api/zego-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userID, roomId: roomID })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to get video call token.');
+                }
+                // The server already returns a complete, signed Token04 —
+                // use it as-is instead of the insecure client-side
+                // generateKitTokenForTest.
+                kitToken = data.token;
+            } catch (err) {
+                console.error('Video call token request failed:', err);
+                addLogEntry(`Failed to start video call: ${err.message}`, 'error');
+                return;
+            }
+
             zp = ZegoUIKitPrebuilt.create(kitToken);
             zp.joinRoom({
                 container: document.querySelector("#zego-video-container"),
