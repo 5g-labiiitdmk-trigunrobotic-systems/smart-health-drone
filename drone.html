@@ -1183,7 +1183,7 @@
 <i class="fas fa-phone-volume"></i> 108 Emergency Call
 </button>
 <!-- Start Simulation Button -->
-<button class="btn btn-success" id="start-sim">
+<button class="btn btn-success" id="start-sim" disabled>
 <i class="fas fa-play"></i> Start Simulation
 </button>
 <!-- Video Call Button -->
@@ -1220,10 +1220,10 @@
 </div>
 </div>
 <div class="btn-group">
-<button class="btn btn-primary" id="deploy-drone">
+<button class="btn btn-primary" id="deploy-drone" disabled>
 <i class="fas fa-paper-plane"></i> Deploy Drone
 </button>
-<button class="btn btn-warning" id="emergency-mode">
+<button class="btn btn-warning" id="emergency-mode" disabled>
 <i class="fas fa-bolt"></i> Emergency Mode
 </button>
 </div>
@@ -1622,6 +1622,9 @@
             droneGuidance = null;
             currentPathIndex = 0;
             startSimBtn.disabled = true;
+            deployDroneBtn.disabled = true;
+            emergencyModeBtn.disabled = true;
+            isSimulationActive = false;
             hospitalInfo.style.display = 'none';
             addLogEntry('Path cleared. All markers removed.', 'info');
         }
@@ -1742,17 +1745,28 @@
                 selectedHospital.textContent = 'None found nearby';
                 hospitalDistance.textContent = '';
                 hospitalInfo.style.display = 'block';
-                addLogEntry('No hospital found near this location; drone can still be deployed manually.', 'alert');
+                addLogEntry('No hospital found near this location; Start Simulation stays disabled until a route can be drawn (try Get Current Location again, or a different location).', 'alert');
+                // No route exists yet -- leave Start Simulation/Deploy
+                // Drone/Emergency Mode disabled rather than letting the
+                // operator hit a "no route" error after clicking them.
             } else {
-                drawAStarRoute([lat, lng], nearestHospital.coords);
                 selectedHospital.textContent = nearestHospital.name;
                 const distance = calculateDistance(lat, lng, nearestHospital.coords[0], nearestHospital.coords[1]).toFixed(1);
                 hospitalDistance.textContent = `Distance: ${distance} km`;
                 hospitalInfo.style.display = 'block';
                 addLogEntry(`Nearest hospital: ${nearestHospital.name} (${distance} km)`, 'info');
-            }
 
-            startSimBtn.disabled = false;
+                // Awaited so Start Simulation only ever enables once
+                // routeWaypoints is actually populated -- previously this
+                // ran unawaited, so clicking Start Simulation (or Deploy
+                // Drone / Emergency Mode, since fixing the "no hospital"
+                // case above doesn't fix a *slow* successful route) in the
+                // few seconds before this resolved a real route would hit
+                // "No route defined for drone to follow" even though a
+                // hospital HAD been found.
+                await drawAStarRoute([lat, lng], nearestHospital.coords);
+                startSimBtn.disabled = false;
+            }
 
             socket.emit('updateDroneData', {
                 roomId: myRoomId,
