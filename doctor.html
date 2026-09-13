@@ -270,6 +270,10 @@
             border: none !important;
         }
 
+        .pending-request-card {
+            min-width: 220px;
+        }
+
         /* Media Queries for responsiveness */
         @media (max-width: 1024px) {
             .main-container {
@@ -297,6 +301,37 @@
             header {
                 flex-direction: column;
                 gap: 10px;
+                align-items: flex-start;
+            }
+
+            .logo-line-1 {
+                font-size: 1rem;
+            }
+
+            .logo-line-2 {
+                font-size: 1.3rem;
+            }
+
+            .logo-line-3 {
+                font-size: 0.75rem;
+            }
+
+            .pending-request-card {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-line-1, .logo-line-1-sub, .logo-line-3 {
+                display: none; /* Free up space on very small screens */
+            }
+
+            .map-section {
+                height: 300px;
+            }
+
+            .console-section {
+                height: 160px;
             }
         }
     </style>
@@ -482,7 +517,7 @@
                 return;
             }
             pendingRequestsList.innerHTML = pendingRequests.map(r => `
-                <div style="background: rgba(230,57,70,0.15); border: 1px solid var(--primary); border-radius: 10px; padding: 10px 15px; min-width: 220px;">
+                <div class="pending-request-card" style="background: rgba(230,57,70,0.15); border: 1px solid var(--primary); border-radius: 10px; padding: 10px 15px;">
                     <div><strong>${r.operatorName}</strong></div>
                     <div style="font-size: 0.8rem; color: var(--accent); margin-bottom: 8px;">
                         Requested ${new Date(r.timestamp).toLocaleTimeString()}
