@@ -147,10 +147,68 @@
         .empty-note { color: var(--accent); opacity: 0.8; padding: 10px 0; }
         [hidden] { display: none !important; }
 
-        /* Tables can have more columns than a phone screen is wide; scroll
-           them horizontally inside their card instead of overflowing the page. */
-        [id$="TableWrap"] {
-            overflow-x: auto;
+        /* Tables can have more columns than a phone screen is wide. Below
+           768px they reflow into a stack of labeled "cards" (one per row)
+           instead of scrolling horizontally, which reads far better with
+           this many columns on a phone. */
+        @media (max-width: 768px) {
+            [id$="TableWrap"] table,
+            [id$="TableWrap"] thead,
+            [id$="TableWrap"] tbody,
+            [id$="TableWrap"] tr,
+            [id$="TableWrap"] td {
+                display: block;
+                width: 100%;
+            }
+
+            [id$="TableWrap"] thead {
+                /* Column headers become redundant once each cell carries
+                   its own data-label; hide visually but keep for screen
+                   readers rather than deleting the semantics. */
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                white-space: nowrap;
+            }
+
+            [id$="TableWrap"] tr {
+                background: rgba(13, 27, 42, 0.5);
+                border: 1px solid rgba(168, 218, 220, 0.3);
+                border-radius: 10px;
+                padding: 10px 12px;
+                margin-bottom: 12px;
+            }
+
+            [id$="TableWrap"] td {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                border-bottom: 1px solid rgba(168, 218, 220, 0.15);
+                padding: 8px 0;
+                text-align: right;
+            }
+
+            [id$="TableWrap"] td:last-child {
+                border-bottom: none;
+            }
+
+            [id$="TableWrap"] td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: var(--accent);
+                text-align: left;
+                flex-shrink: 0;
+            }
+
+            /* The Action column's button already reads fine right-aligned
+               next to its "Action" label; just make sure it never wraps
+               awkwardly against the label. */
+            [id$="TableWrap"] td .btn {
+                flex-shrink: 0;
+            }
         }
 
         @media (max-width: 768px) {
@@ -368,12 +426,12 @@
             }
             const rows = users.map(u => `
                 <tr>
-                    <td>${u.name}</td>
-                    <td>${u.userId}</td>
-                    <td>${roleLabelFn(u)}</td>
-                    <td><span class="badge ${u.online ? 'badge-online' : 'badge-offline'}">${u.online ? 'Online' : 'Offline'}</span></td>
-                    <td><span class="badge ${u.paired ? 'badge-paired' : 'badge-free'}">${u.paired ? 'Paired' : 'Free'}</span></td>
-                    <td><button class="btn btn-danger" data-remove="${u.userId}">Remove</button></td>
+                    <td data-label="Name">${u.name}</td>
+                    <td data-label="User ID">${u.userId}</td>
+                    <td data-label="Detail">${roleLabelFn(u)}</td>
+                    <td data-label="Status"><span class="badge ${u.online ? 'badge-online' : 'badge-offline'}">${u.online ? 'Online' : 'Offline'}</span></td>
+                    <td data-label="Pairing"><span class="badge ${u.paired ? 'badge-paired' : 'badge-free'}">${u.paired ? 'Paired' : 'Free'}</span></td>
+                    <td data-label="Action"><button class="btn btn-danger" data-remove="${u.userId}">Remove</button></td>
                 </tr>
             `).join('');
             container.innerHTML = `
@@ -421,10 +479,10 @@
             } else {
                 const rows = connections.map(c => `
                     <tr>
-                        <td>${c.roomId}</td>
-                        <td>${c.operatorName || '-'}</td>
-                        <td>${c.doctorName || '-'}</td>
-                        <td>${c.role || '-'}</td>
+                        <td data-label="Room">${c.roomId}</td>
+                        <td data-label="Drone Operator">${c.operatorName || '-'}</td>
+                        <td data-label="Doctor">${c.doctorName || '-'}</td>
+                        <td data-label="Type">${c.role || '-'}</td>
                     </tr>
                 `).join('');
                 connWrap.innerHTML = `
@@ -441,9 +499,9 @@
             } else {
                 const rows = pendingRequests.map(r => `
                     <tr>
-                        <td>${r.roomId}</td>
-                        <td>${r.operatorName || '-'}</td>
-                        <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+                        <td data-label="Room">${r.roomId}</td>
+                        <td data-label="Drone Operator">${r.operatorName || '-'}</td>
+                        <td data-label="Requested At">${new Date(r.timestamp).toLocaleTimeString()}</td>
                     </tr>
                 `).join('');
                 pendingWrap.innerHTML = `
