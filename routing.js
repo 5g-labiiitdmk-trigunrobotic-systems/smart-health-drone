@@ -75,8 +75,15 @@ function buildGraphFromOverpassElements(elements) {
 }
 
 async function fetchRoadGraph(bbox, fetchImpl = fetch) {
+    // This pulls every drivable way (plus every node they reference) in the
+    // bounding box -- much heavier than the simple point-radius hospital
+    // search, which is why the query itself asks Overpass for a 25s budget
+    // ([timeout:25]). The client has to allow at least that long too, or
+    // it aborts the connection before the server's own timeout would even
+    // fire -- which is exactly what was happening with the 8s default
+    // tuned for the lightweight hospital lookup.
     const query = `[out:json][timeout:25];way["highway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});(._;>;);out body;`;
-    const data = await queryOverpass(query, { fetchImpl });
+    const data = await queryOverpass(query, { fetchImpl, timeoutMs: 28000 });
     return buildGraphFromOverpassElements(data.elements || []);
 }
 
