@@ -320,6 +320,20 @@
         </div>
     </header>
 
+    <section class="pending-requests-section" style="
+        background: rgba(29, 53, 87, 0.7);
+        border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+        padding: 15px 20px;
+    ">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
+            <i class="fas fa-bell" style="color: var(--warning);"></i>
+            <strong>Pending Emergency Requests</strong>
+        </div>
+        <div id="pending-requests-list" style="display:flex; flex-wrap:wrap; gap:12px;">
+            <p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>
+        </div>
+    </section>
+
     <div class="main-container">
         <section class="map-section">
             <div id="map"></div>
@@ -373,13 +387,17 @@
 
         // Retrieve connection info from localStorage
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
-        let doctorName = "Doctor";
+        // Prefer the actually logged-in doctor's name (set at login on the
+        // portal page) so Accept-a-call works without going through the old
+        // manual "connect" dropdown flow first.
+        let doctorName = localStorage.getItem('myName') || "Doctor";
         let droneName = "Ambulance Drone";
         // Unique per-pairing room, assigned by the server when this doctor
         // connected to a drone from the portal page. Falls back to a
         // per-tab random id so testing without going through the portal
         // doesn't accidentally join a shared/global room.
-        const myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+        let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+        const myUserId = localStorage.getItem('myUserId') || null;
 
         if (currentConnection && currentConnection.role === 'doctor') {
             doctorName = currentConnection.doctorName;
@@ -440,7 +458,64 @@
             addLogEntry('Connected to signaling server.', 'info');
             socket.emit('join', myRoomId);
             addLogEntry(`Joined room: ${myRoomId}`, 'info');
+            if (myUserId) {
+                socket.emit('identify', { userId: myUserId, role: 'doctor' });
+            }
         });
+
+        // --- Call Assignment (Feature #3) ---
+        // Rather than any doctor being able to join any drone's call, an
+        // ambulance/drone's emergency request sits in a server-side queue
+        // until a specific doctor clicks Accept here, at which point only
+        // that doctor is scoped into the drone's unique room.
+        const pendingRequestsList = document.getElementById('pending-requests-list');
+        let pendingRequests = [];
+
+        socket.on('pendingRequestsUpdated', (requests) => {
+            pendingRequests = requests || [];
+            renderPendingRequests();
+        });
+
+        function renderPendingRequests() {
+            if (!pendingRequests.length) {
+                pendingRequestsList.innerHTML = '<p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>';
+                return;
+            }
+            pendingRequestsList.innerHTML = pendingRequests.map(r => `
+                <div style="background: rgba(230,57,70,0.15); border: 1px solid var(--primary); border-radius: 10px; padding: 10px 15px; min-width: 220px;">
+                    <div><strong>${r.operatorName}</strong></div>
+                    <div style="font-size: 0.8rem; color: var(--accent); margin-bottom: 8px;">
+                        Requested ${new Date(r.timestamp).toLocaleTimeString()}
+                    </div>
+                    <button class="btn" data-accept="${r.roomId}" style="background: var(--success); padding: 6px 14px; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                        <i class="fas fa-check"></i> Accept
+                    </button>
+                </div>
+            `).join('');
+
+            pendingRequestsList.querySelectorAll('[data-accept]').forEach(btn => {
+                btn.addEventListener('click', () => acceptRequest(btn.getAttribute('data-accept')));
+            });
+        }
+
+        function acceptRequest(roomId) {
+            socket.emit('acceptRequest', { roomId, doctorUserId: myUserId, doctorName }, (result) => {
+                if (result && result.error) {
+                    alert(result.error);
+                    return;
+                }
+                const connection = result.connection;
+                myRoomId = connection.roomId;
+                localStorage.setItem('currentConnection', JSON.stringify(connection));
+                socket.emit('join', myRoomId);
+
+                droneName = connection.operatorName;
+                doctorHeaderName.textContent = `${doctorName} Interface`;
+                videoCallTitleText.textContent = `Video Call with ${droneName}`;
+
+                addLogEntry(`Accepted emergency call from ${droneName}. Now receiving their live GPS and video feed.`, 'success');
+            });
+        }
 
         socket.on('droneData', (data) => {
             let ambulanceCoords = KURNOOL_COORDS;

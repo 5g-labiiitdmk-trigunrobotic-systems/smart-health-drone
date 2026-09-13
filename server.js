@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const { computeRoute } = require('./routing');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +46,15 @@ const io = new Server(server, {
 // Keyed by roomId so multiple drone/doctor pairs can be active at once
 // without leaking GPS or video data across pairings.
 let activeConnections = {};
+
+// Emergency calls a drone has raised but no doctor has accepted yet,
+// keyed by the roomId that was pre-assigned when the request was made.
+let pendingRequests = {};
+
+// userId -> { socketId, role }, populated by the 'identify' socket event
+// once a client knows which logged-in user it is (used for admin's online
+// status view and to notify a specific drone when a doctor accepts its call).
+let onlineUsers = new Map();
 
 // --- User store (interim JSON-file store; replace with a real DB later) ---
 const USERS_FILE = path.join(__dirname, 'users.json');
@@ -163,6 +173,17 @@ app.get('/api/users', (req, res) => {
     res.json({ users: filtered });
 });
 
+// Convenience aliases over /api/users for populating doctor/drone dropdowns.
+app.get('/api/doctors', (req, res) => {
+    const users = loadUsers().map(toPublicUser).filter(u => u.userType === 'doctor');
+    res.json({ users });
+});
+
+app.get('/api/drones', (req, res) => {
+    const users = loadUsers().map(toPublicUser).filter(u => u.userType === 'drone_operator');
+    res.json({ users });
+});
+
 // --- ZegoCloud Kit Token generation (server-side, production-safe) ---
 // Implements the ZEGOCLOUD "Token04" scheme so appID/serverSecret never
 // reach the browser. See ZEGOCLOUD server-assistant docs for the format.
@@ -246,12 +267,175 @@ app.post('/api/zego-token', (req, res) => {
     }
 });
 
+// --- Nearby hospitals (OpenStreetMap Overpass API, proxied server-side) ---
+app.get('/api/hospitals', async (req, res) => {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const radiusMeters = parseInt(req.query.radius, 10) || 10000; // default 10km
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        return res.status(400).json({ error: 'lat and lng query parameters are required.' });
+    }
+
+    const query = `[out:json][timeout:25];node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});out body;`;
+
+    try {
+        const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(query)
+        });
+        if (!overpassRes.ok) {
+            throw new Error(`Overpass API returned ${overpassRes.status}`);
+        }
+        const data = await overpassRes.json();
+        const hospitals = (data.elements || [])
+            .filter(el => typeof el.lat === 'number' && typeof el.lon === 'number')
+            .map(el => ({
+                id: el.id,
+                name: (el.tags && el.tags.name) || 'Unnamed Hospital',
+                lat: el.lat,
+                lng: el.lon
+            }));
+        res.json({ hospitals });
+    } catch (err) {
+        console.error('Hospital lookup failed:', err.message);
+        res.status(502).json({ error: 'Failed to fetch nearby hospitals: ' + err.message });
+    }
+});
+
+// --- A* road routing (OpenStreetMap Overpass API + server-side A*) ---
+app.post('/api/route', async (req, res) => {
+    const { start, end, trafficDensity } = req.body || {};
+    if (!start || !end || typeof start.lat !== 'number' || typeof start.lng !== 'number' ||
+        typeof end.lat !== 'number' || typeof end.lng !== 'number') {
+        return res.status(400).json({ error: 'start and end coordinates ({lat, lng}) are required.' });
+    }
+
+    try {
+        const route = await computeRoute({
+            start, end,
+            trafficDensity: Number(trafficDensity) || 0
+        });
+        res.json(route);
+    } catch (err) {
+        console.error('Route computation failed:', err.message);
+        res.status(502).json({ error: 'Failed to compute route: ' + err.message });
+    }
+});
+
+// --- Admin authentication (placeholder) ---
+// A single shared admin credential via env vars, good enough to gate the
+// admin panel for now. This is NOT a real role-based auth system: tokens
+// are held in memory (lost on restart, not scoped per-admin-user) and
+// there is only one admin account. Replace with proper per-admin accounts
+// and persisted sessions before relying on this for real access control.
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
+const adminSessions = new Set();
+
+function requireAdmin(req, res, next) {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token || !adminSessions.has(token)) {
+        return res.status(401).json({ error: 'Admin authentication required.' });
+    }
+    next();
+}
+
+app.post('/api/admin/login', (req, res) => {
+    if (!ADMIN_PASSWORD) {
+        return res.status(500).json({
+            error: 'Admin login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD env vars on the server.'
+        });
+    }
+    const { username, password } = req.body || {};
+    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Invalid admin credentials.' });
+    }
+    const token = uuidv4();
+    adminSessions.add(token);
+    res.json({ token });
+});
+
+app.post('/api/admin/logout', requireAdmin, (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.slice(7);
+    adminSessions.delete(token);
+    res.json({ success: true });
+});
+
+// Registered users annotated with live online/pairing status for the admin panel.
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+    const users = loadUsers().map(u => {
+        const pub = toPublicUser(u);
+        const pairing = Object.values(activeConnections).find(c =>
+            c.doctorUserId === u.userId || c.operatorUserId === u.userId ||
+            c.doctorName === u.userId || c.operatorName === u.userId
+        );
+        return {
+            ...pub,
+            online: onlineUsers.has(u.userId),
+            paired: !!pairing,
+            roomId: pairing ? pairing.roomId : null
+        };
+    });
+    res.json({ users });
+});
+
+// Active drone/doctor pairings and unassigned emergency requests, for the
+// admin panel's real-time view.
+app.get('/api/admin/connections', requireAdmin, (req, res) => {
+    res.json({
+        connections: Object.values(activeConnections),
+        pendingRequests: Object.values(pendingRequests)
+    });
+});
+
+app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
+    const users = loadUsers();
+    const idx = users.findIndex(u => u.userId === req.params.userId);
+    if (idx === -1) {
+        return res.status(404).json({ error: 'User not found.' });
+    }
+    users.splice(idx, 1);
+    saveUsers(users);
+
+    const online = onlineUsers.get(req.params.userId);
+    if (online) {
+        const kickSocket = io.sockets.sockets.get(online.socketId);
+        if (kickSocket) {
+            kickSocket.emit('accountRemoved');
+            kickSocket.disconnect(true);
+        }
+        onlineUsers.delete(req.params.userId);
+    }
+
+    res.json({ success: true });
+});
+
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
 // Socket.io events
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id} from ${socket.handshake.address}`);
 
-    // Send all currently active connections to a newly connected client
+    // Send all currently active connections and unassigned emergency
+    // requests to a newly connected client (e.g. a doctor panel opening).
     socket.emit('currentConnectionStatus', Object.values(activeConnections));
+    socket.emit('pendingRequestsUpdated', Object.values(pendingRequests));
+
+    // Associates this socket with a logged-in userId, so the admin panel
+    // can show accurate online status and so a doctor's acceptance can be
+    // routed back to the exact drone socket that raised the request.
+    socket.on('identify', ({ userId, role } = {}) => {
+        if (!userId) return;
+        socket.data.userId = userId;
+        socket.data.role = role;
+        onlineUsers.set(userId, { socketId: socket.id, role });
+    });
 
     socket.on('join', (room) => {
         socket.join(room);
@@ -297,8 +481,86 @@ io.on('connection', (socket) => {
         socket.to(data.roomId).emit('droneData', data);
     });
 
+    // --- Emergency call queue: a drone raises a request, an available ---
+    // --- doctor accepts it, rather than doctors self-selecting a call. ---
+    socket.on('requestEmergency', (data = {}) => {
+        const roomId = uuidv4();
+        const request = {
+            roomId,
+            droneUserId: data.droneUserId || null,
+            operatorName: data.operatorName || 'Unknown Operator',
+            location: data.location || null,
+            socketId: socket.id,
+            timestamp: Date.now()
+        };
+        pendingRequests[roomId] = request;
+        // The requesting drone joins its own (future) room immediately so
+        // it starts receiving anything sent to it as soon as it's assigned.
+        socket.join(roomId);
+
+        socket.emit('emergencyRequestCreated', { roomId });
+        io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
+        console.log(`New emergency request ${roomId} from ${request.operatorName}`);
+    });
+
+    socket.on('cancelEmergencyRequest', (roomId) => {
+        if (pendingRequests[roomId] && pendingRequests[roomId].socketId === socket.id) {
+            delete pendingRequests[roomId];
+            io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
+        }
+    });
+
+    socket.on('acceptRequest', ({ roomId, doctorUserId, doctorName } = {}, callback) => {
+        const request = pendingRequests[roomId];
+        if (!request) {
+            if (typeof callback === 'function') {
+                callback({ error: 'This request is no longer available.' });
+            }
+            return;
+        }
+        delete pendingRequests[roomId];
+
+        const connection = {
+            role: 'assigned',
+            roomId,
+            doctorName: doctorName || doctorUserId,
+            doctorUserId,
+            operatorName: request.operatorName,
+            droneUserId: request.droneUserId
+        };
+        activeConnections[roomId] = connection;
+        socket.join(roomId);
+
+        // Tell the specific drone that raised this request who was assigned,
+        // and let everyone know the request list / connection list changed.
+        io.to(request.socketId).emit('assignedDoctor', connection);
+        io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
+        io.emit('currentConnectionStatus', Object.values(activeConnections));
+
+        if (typeof callback === 'function') {
+            callback({ connection });
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
+
+        if (socket.data.userId) {
+            onlineUsers.delete(socket.data.userId);
+        }
+
+        // Drop any pending emergency request this socket raised but nobody
+        // accepted yet, so it doesn't linger forever on the doctor panel.
+        let requestsChanged = false;
+        for (const [roomId, request] of Object.entries(pendingRequests)) {
+            if (request.socketId === socket.id) {
+                delete pendingRequests[roomId];
+                requestsChanged = true;
+            }
+        }
+        if (requestsChanged) {
+            io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
+        }
     });
 });
 

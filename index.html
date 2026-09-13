@@ -445,6 +445,7 @@
             <p>&copy; 2025 IIITDM Kurnool - Ambulance Patrol Drone. All rights reserved.</p>
             <p>Developed by Dr. K. Krishna Naik, Dr. M. Ravi Kumar and G. Kashifa Anjum</p>
             <button class="btn" id="resetConnectionBtn" style="margin-top: 15px;">Reset Connection</button>
+            <a href="/admin.html" style="color: var(--accent); font-size: 0.85rem; margin-top: 10px;">Admin Panel</a>
         </footer>
     </div>
     <!-- Registration Modal -->
@@ -832,9 +833,14 @@
         socket.on('connect', () => {
             console.log('Connected to server');
             updateConnectionStatus(true, 'Connected to server');
-            
-            // Request current connection status from server
-            socket.emit('getConnectionStatus');
+
+            // Let the server know which logged-in user this socket belongs
+            // to, so the admin panel's online status is accurate.
+            const myUserId = localStorage.getItem('myUserId');
+            const myRole = localStorage.getItem('myRole');
+            if (myUserId) {
+                socket.emit('identify', { userId: myUserId, role: myRole });
+            }
         });
 
         socket.on('disconnect', () => {
@@ -944,11 +950,13 @@
             }
         }
 
-        // Populate a <select> element from the server's registered users of a given type
+        // Populate a <select> element from the server's registered users of a given type.
+        // Supports any number of registered doctors/drones (no hardcoded list).
         async function populateUserSelect(selectEl, userType, placeholder) {
             selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+            const endpoint = userType === 'doctor' ? '/api/doctors' : '/api/drones';
             try {
-                const res = await fetch(`/api/users?userType=${encodeURIComponent(userType)}`);
+                const res = await fetch(endpoint);
                 const { users } = await res.json();
                 (users || []).forEach(u => {
                     const option = document.createElement('option');
@@ -1116,6 +1124,11 @@
                     alert(data.error || 'Login failed.');
                     return;
                 }
+                localStorage.setItem('myUserId', data.user.userId);
+                localStorage.setItem('myRole', data.user.userType);
+                localStorage.setItem('myName', data.user.name);
+                socket.emit('identify', { userId: data.user.userId, role: data.user.userType });
+
                 alert(`Welcome back, ${data.user.name}! Please select your role to connect.`);
                 loginModal.style.display = 'none';
                 document.getElementById('loginForm').reset();

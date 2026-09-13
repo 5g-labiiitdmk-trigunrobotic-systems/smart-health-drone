@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Ambulance Patrol Drone</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #e63946;
+            --secondary: #1d3557;
+            --accent: #a8dadc;
+            --light: #f1faee;
+            --dark: #0d1b2a;
+            --success: #2a9d8f;
+            --warning: #e9c46a;
+            --danger: #e76f51;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: var(--light);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--accent);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 8px 18px;
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover { background: #f0545e; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+        }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: #ff8563; }
+
+        .card {
+            background: rgba(29, 53, 87, 0.7);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(168, 218, 220, 0.3);
+        }
+
+        .card h2 {
+            color: var(--accent);
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid rgba(168, 218, 220, 0.2);
+            font-size: 0.9rem;
+        }
+
+        th { color: var(--accent); }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-online { background: var(--success); color: white; }
+        .badge-offline { background: #555; color: #ccc; }
+        .badge-paired { background: var(--warning); color: #333; }
+        .badge-free { background: rgba(168, 218, 220, 0.3); color: var(--light); }
+
+        .auth-form {
+            max-width: 400px;
+            margin: 80px auto;
+            background: rgba(29, 53, 87, 0.85);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid var(--accent);
+        }
+
+        .auth-form h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; margin-bottom: 6px; }
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(13, 27, 42, 0.7);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            color: var(--light);
+            font-size: 1rem;
+        }
+
+        .error-text { color: var(--danger); margin-top: 10px; text-align: center; }
+        .empty-note { color: var(--accent); opacity: 0.8; padding: 10px 0; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container" id="loginView">
+        <div class="auth-form">
+            <h2><i class="fas fa-user-shield"></i> Admin Login</h2>
+            <p style="color: var(--accent); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">
+                Placeholder single-account auth (ADMIN_USERNAME / ADMIN_PASSWORD env vars).
+                Replace with real role-based auth before production use.
+            </p>
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <label for="adminUsername">Username</label>
+                    <input type="text" id="adminUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="adminPassword">Password</label>
+                    <input type="password" id="adminPassword" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Login</button>
+                <p class="error-text" id="loginError" hidden></p>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="dashboardView" hidden>
+        <header>
+            <h1><i class="fas fa-user-shield"></i> Admin Panel</h1>
+            <div>
+                <a href="/" class="btn btn-outline">Portal</a>
+                <button class="btn btn-danger" id="logoutBtn">Logout</button>
+            </div>
+        </header>
+
+        <div class="card">
+            <h2><i class="fas fa-satellite-dish"></i> Active Drone-Doctor Pairings</h2>
+            <div id="connectionsTableWrap">
+                <p class="empty-note">Loading...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-bell"></i> Unassigned Emergency Requests</h2>
+            <div id="pendingTableWrap">
+                <p class="empty-note">Loading...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-user-md"></i> Registered Doctors</h2>
+            <div id="doctorsTableWrap">
+                <p class="empty-note">Loading...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-drone"></i> Registered Drone Operators</h2>
+            <div id="dronesTableWrap">
+                <p class="empty-note">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+        const loginView = document.getElementById('loginView');
+        const dashboardView = document.getElementById('dashboardView');
+        const loginError = document.getElementById('loginError');
+
+        let adminToken = sessionStorage.getItem('adminToken');
+
+        function showDashboard() {
+            loginView.hidden = true;
+            dashboardView.hidden = false;
+            refreshAll();
+        }
+
+        function showLogin() {
+            loginView.hidden = false;
+            dashboardView.hidden = true;
+        }
+
+        document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginError.hidden = true;
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            try {
+                const res = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    loginError.textContent = data.error || 'Login failed.';
+                    loginError.hidden = false;
+                    return;
+                }
+                adminToken = data.token;
+                sessionStorage.setItem('adminToken', adminToken);
+                showDashboard();
+            } catch (err) {
+                loginError.textContent = 'Could not reach the server.';
+                loginError.hidden = false;
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch('/api/admin/logout', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${adminToken}` }
+                });
+            } catch (err) { /* ignore */ }
+            sessionStorage.removeItem('adminToken');
+            adminToken = null;
+            showLogin();
+        });
+
+        async function adminFetch(url, options = {}) {
+            const res = await fetch(url, {
+                ...options,
+                headers: { ...(options.headers || {}), Authorization: `Bearer ${adminToken}` }
+            });
+            if (res.status === 401) {
+                sessionStorage.removeItem('adminToken');
+                adminToken = null;
+                showLogin();
+                throw new Error('Session expired. Please log in again.');
+            }
+            return res;
+        }
+
+        function renderUsersTable(container, users, roleLabelFn) {
+            if (!users.length) {
+                container.innerHTML = '<p class="empty-note">None registered yet.</p>';
+                return;
+            }
+            const rows = users.map(u => `
+                <tr>
+                    <td>${u.name}</td>
+                    <td>${u.userId}</td>
+                    <td>${roleLabelFn(u)}</td>
+                    <td><span class="badge ${u.online ? 'badge-online' : 'badge-offline'}">${u.online ? 'Online' : 'Offline'}</span></td>
+                    <td><span class="badge ${u.paired ? 'badge-paired' : 'badge-free'}">${u.paired ? 'Paired' : 'Free'}</span></td>
+                    <td><button class="btn btn-danger" data-remove="${u.userId}">Remove</button></td>
+                </tr>
+            `).join('');
+            container.innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>User ID</th><th>Detail</th><th>Status</th><th>Pairing</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+            container.querySelectorAll('[data-remove]').forEach(btn => {
+                btn.addEventListener('click', () => removeUser(btn.getAttribute('data-remove')));
+            });
+        }
+
+        async function removeUser(userId) {
+            if (!confirm(`Remove/deactivate user "${userId}"? This cannot be undone.`)) return;
+            try {
+                const res = await adminFetch(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Failed to remove user.');
+                    return;
+                }
+                refreshAll();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function refreshUsers() {
+            const res = await adminFetch('/api/admin/users');
+            const { users } = await res.json();
+            const doctors = users.filter(u => u.userType === 'doctor');
+            const drones = users.filter(u => u.userType === 'drone_operator');
+            renderUsersTable(document.getElementById('doctorsTableWrap'), doctors, u => u.specialization || 'General');
+            renderUsersTable(document.getElementById('dronesTableWrap'), drones, u => [u.city, u.state].filter(Boolean).join(', ') || '-');
+        }
+
+        async function refreshConnections() {
+            const res = await adminFetch('/api/admin/connections');
+            const { connections, pendingRequests } = await res.json();
+
+            const connWrap = document.getElementById('connectionsTableWrap');
+            if (!connections.length) {
+                connWrap.innerHTML = '<p class="empty-note">No active pairings right now.</p>';
+            } else {
+                const rows = connections.map(c => `
+                    <tr>
+                        <td>${c.roomId}</td>
+                        <td>${c.operatorName || '-'}</td>
+                        <td>${c.doctorName || '-'}</td>
+                        <td>${c.role || '-'}</td>
+                    </tr>
+                `).join('');
+                connWrap.innerHTML = `
+                    <table>
+                        <thead><tr><th>Room</th><th>Drone Operator</th><th>Doctor</th><th>Type</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            }
+
+            const pendingWrap = document.getElementById('pendingTableWrap');
+            if (!pendingRequests.length) {
+                pendingWrap.innerHTML = '<p class="empty-note">No unassigned emergency requests.</p>';
+            } else {
+                const rows = pendingRequests.map(r => `
+                    <tr>
+                        <td>${r.roomId}</td>
+                        <td>${r.operatorName || '-'}</td>
+                        <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+                    </tr>
+                `).join('');
+                pendingWrap.innerHTML = `
+                    <table>
+                        <thead><tr><th>Room</th><th>Drone Operator</th><th>Requested At</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            }
+        }
+
+        async function refreshAll() {
+            try {
+                await Promise.all([refreshUsers(), refreshConnections()]);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Live-ish updates: refresh on relevant socket events instead of
+        // blind polling, plus a slow periodic refresh as a safety net.
+        const socket = io();
+        socket.on('currentConnectionStatus', () => { if (adminToken) refreshConnections(); });
+        socket.on('pendingRequestsUpdated', () => { if (adminToken) refreshConnections(); });
+        setInterval(() => { if (adminToken) refreshAll(); }, 15000);
+
+        if (adminToken) {
+            showDashboard();
+        } else {
+            showLogin();
+        }
+    </script>
+</body>
+</html>

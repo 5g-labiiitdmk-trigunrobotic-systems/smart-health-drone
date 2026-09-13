@@ -6,7 +6,6 @@
 <title>Ambulance Drone Simulator - IIITDM Kurnool</title>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
-<link href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" rel="stylesheet"/>
 <style>
         * {
             margin: 0;
@@ -1004,6 +1003,15 @@
 <i class="fas fa-bolt"></i> Emergency Mode
 </button>
 </div>
+<div class="btn-group" style="margin-top: 10px;">
+<button class="btn btn-success" id="autonomous-mode-toggle">
+<i class="fas fa-robot"></i> Enable Autonomous Mode
+</button>
+</div>
+<div id="autonomous-status" style="display:none; margin-top: 10px; font-size: 0.85rem; color: var(--accent);">
+    <div>ETA: <span id="autonomous-eta">-</span> min</div>
+    <div>Distance remaining: <span id="autonomous-distance-remaining">-</span> km</div>
+</div>
 </div>
 <div class="control-panel">
 <div class="panel-title">
@@ -1108,6 +1116,85 @@
 <div>G. Kashifa Anjum   (Lead Developer)</div>
 </div>
 </div>
+<!-- Location Permission Explainer (Feature #4) -->
+<div id="location-permission-modal" style="
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(13,27,42,0.85);
+    z-index: 3000;
+    align-items: center;
+    justify-content: center;
+">
+    <div style="
+        background: rgba(29,53,87,0.97);
+        border: 2px solid #a8dadc;
+        border-radius: 15px;
+        padding: 30px;
+        max-width: 420px;
+        width: 90%;
+        color: white;
+        text-align: center;
+        box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    ">
+        <i class="fas fa-map-marker-alt" style="font-size: 2.5rem; color: #e63946; margin-bottom: 15px;"></i>
+        <h3 style="margin-bottom: 12px;">Location Access Needed</h3>
+        <p style="color: #a8dadc; line-height: 1.5; margin-bottom: 20px;">
+            This drone simulation needs your current location to place the ambulance marker,
+            find the nearest hospital, and calculate a live road route. Your browser will now
+            ask for permission — click "Allow" on that prompt to continue.
+        </p>
+        <button class="btn btn-primary" id="allow-location-btn" style="margin-right: 10px;">
+            <i class="fas fa-location-arrow"></i> Continue &amp; Allow Location
+        </button>
+        <button class="btn" id="manual-location-btn" style="background: #555;">
+            Enter Location Manually
+        </button>
+    </div>
+</div>
+
+<!-- Manual location fallback (used if permission is denied) -->
+<div id="manual-location-modal" style="
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(13,27,42,0.85);
+    z-index: 3000;
+    align-items: center;
+    justify-content: center;
+">
+    <div style="
+        background: rgba(29,53,87,0.97);
+        border: 2px solid #a8dadc;
+        border-radius: 15px;
+        padding: 30px;
+        max-width: 380px;
+        width: 90%;
+        color: white;
+        box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    ">
+        <h3 style="margin-bottom: 15px; text-align: center;">Enter Starting Location</h3>
+        <form id="manual-location-form">
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom: 5px;">Latitude</label>
+                <input type="number" step="any" id="manual-lat" required
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: rgba(13,27,42,0.7); color: white;"
+                    value="15.8281">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display:block; margin-bottom: 5px;">Longitude</label>
+                <input type="number" step="any" id="manual-lng" required
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: rgba(13,27,42,0.7); color: white;"
+                    value="78.0373">
+            </div>
+            <div style="display:flex; gap:10px; justify-content: center;">
+                <button type="submit" class="btn btn-primary">Use This Location</button>
+                <button type="button" class="btn" id="cancel-manual-location-btn" style="background:#555;">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="hospital-info" id="hospital-info">
 <div class="hospital-title">
 <i class="fas fa-hospital"></i>
@@ -1190,7 +1277,6 @@
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
 <script>
@@ -1202,8 +1288,11 @@
     let routeWaypoints = [];
     let droneGuidance = null;
     let guideLine = null;
-    let routingControl = null;
+    let routePolyline = null; // drawn from our own /api/route (A*) result
     let ambulanceInterval;
+    let hospitalMarkers = []; // nearby hospitals fetched from OpenStreetMap
+    let autonomousModeActive = false;
+    let autonomousAnimationHandle = null;
     const PI_CAMERA_URL = "http://10.22.129.164:5000/normal"; // Updated Pi Camera URL
     const socket = io(); // Connect to the Socket.IO server
     
@@ -1259,7 +1348,7 @@
         // operator connected to a doctor from the portal page. Falls back to
         // a per-tab random id so testing without going through the portal
         // doesn't accidentally join a shared/global room.
-        const myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+        let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
 
         // Join this pairing's own room instead of a hardcoded global one, so
         // GPS/video data never crosses over between simultaneous drone/doctor pairs.
@@ -1296,9 +1385,10 @@
             marker.bindPopup(`<strong>${hospital.name}</strong>`);
         });
         
-        // Get current location when button clicked
+        // Get current location when button clicked (shows the permission
+        // explainer first; see requestLocation()).
         getLocationBtn.addEventListener('click', function() {
-            getCurrentLocation();
+            requestLocation();
         });
         
         // Clear the current path
@@ -1308,9 +1398,11 @@
             if (droneMarker) map.removeLayer(droneMarker);
             if (guideLine) map.removeLayer(guideLine);
             if (droneGuidance) map.removeLayer(droneGuidance);
-            if (routingControl) map.removeControl(routingControl);
+            if (routePolyline) map.removeLayer(routePolyline);
             if (ambulanceInterval) clearInterval(ambulanceInterval);
+            stopAutonomousMode();
             routeWaypoints = [];
+            routePolyline = null;
             guideLine = null;
             droneGuidance = null;
             currentPathIndex = 0;
@@ -1321,86 +1413,168 @@
         
         clearPathBtn.addEventListener('click', clearPath);
         
-        // Get current location using browser geolocation
-        function getCurrentLocation() {
+        // --- Location permission UX ---
+        // Explains why location is needed *before* triggering the browser's
+        // native permission prompt, and offers a manual fallback if the
+        // operator denies it (or geolocation isn't available at all).
+        function requestLocation() {
+            showLocationPermissionModal();
+        }
+
+        function showLocationPermissionModal() {
+            document.getElementById('location-permission-modal').style.display = 'flex';
+        }
+
+        function hideLocationPermissionModal() {
+            document.getElementById('location-permission-modal').style.display = 'none';
+        }
+
+        function showManualLocationModal() {
+            hideLocationPermissionModal();
+            document.getElementById('manual-location-modal').style.display = 'flex';
+        }
+
+        function hideManualLocationModal() {
+            document.getElementById('manual-location-modal').style.display = 'none';
+        }
+
+        document.getElementById('allow-location-btn').addEventListener('click', () => {
+            hideLocationPermissionModal();
+            acquireGPSLocation();
+        });
+
+        document.getElementById('manual-location-btn').addEventListener('click', showManualLocationModal);
+
+        document.getElementById('manual-location-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const lat = parseFloat(document.getElementById('manual-lat').value);
+            const lng = parseFloat(document.getElementById('manual-lng').value);
+            if (Number.isNaN(lat) || Number.isNaN(lng)) {
+                alert('Please enter valid latitude and longitude values.');
+                return;
+            }
+            hideManualLocationModal();
+            addLogEntry(`Using manually entered location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`, 'info');
+            onLocationAcquired(lat, lng);
+        });
+
+        document.getElementById('cancel-manual-location-btn').addEventListener('click', hideManualLocationModal);
+
+        // Acquire GPS location using the browser's geolocation API (called
+        // only after the operator has confirmed via the explainer modal).
+        function acquireGPSLocation() {
             addLogEntry('Requesting current location...', 'info');
             gpsIndicator.innerHTML = '<i class="fas fa-satellite gps-icon"></i> Acquiring GPS...';
             gpsIndicator.classList.remove('active');
-            
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    position => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        
-                        // Update GPS indicator
-                        gpsIndicator.innerHTML = `<i class="fas fa-satellite gps-icon"></i> GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-                        gpsIndicator.classList.add('active');
-                        
-                        // Center map on location
-                        map.setView([lat, lng], 16);
-                        
-                        // Find nearest hospital
-                        const nearestHospital = findNearestHospital(lat, lng);
-                        
-                        // Create route
-                        createRoadRoute([lat, lng], nearestHospital.coords);
-                        
-                        // Update hospital info
-                        selectedHospital.textContent = nearestHospital.name;
-                        const distance = calculateDistance(lat, lng, nearestHospital.coords[0], nearestHospital.coords[1]).toFixed(1);
-                        hospitalDistance.textContent = `Distance: ${distance} km`;
-                        hospitalInfo.style.display = 'block';
-                        
-                        addLogEntry(`Current location acquired: ${lat.toFixed(6)}, ${lng.toFixed(6)}`, 'success');
-                        addLogEntry(`Nearest hospital: ${nearestHospital.name} (${distance} km)`, 'info');
-                        
-                        startSimBtn.disabled = false;
 
-                        // Emit GPS data to server for doctor.html, scoped to this pairing's room
-                        socket.emit('updateDroneData', {
-                            roomId: myRoomId,
-                            ambulance: { lat: lat, lng: lng },
-                            drone: { lat: lat, lng: lng } // Drone starts at ambulance location
-                        });
-                    },
-                    error => {
-                        let errorMsg = 'Unable to retrieve your location. ';
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMsg += "Permission denied. Please enable location services.";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMsg += "Location information is unavailable.";
-                                break;
-                            case error.TIMEOUT:
-                                errorMsg += "The request to get user location timed out.";
-                                break;
-                            default:
-                                errorMsg += "An unknown error occurred.";
-                                break;
-                        }
-                        
-                        gpsIndicator.innerHTML = '<i class="fas fa-satellite gps-icon"></i> GPS Error';
-                        gpsIndicator.classList.remove('active');
-                        
-                        addLogEntry(errorMsg, 'alert');
-                    }
-                );
-            } else {
+            if (!navigator.geolocation) {
                 gpsIndicator.innerHTML = '<i class="fas fa-satellite gps-icon"></i> GPS Not Supported';
-                addLogEntry("Geolocation is not supported by this browser.", 'alert');
+                addLogEntry('Geolocation is not supported by this browser. Please enter your location manually.', 'alert');
+                showManualLocationModal();
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                position => onLocationAcquired(position.coords.latitude, position.coords.longitude),
+                error => {
+                    let errorMsg = 'Unable to retrieve your location. ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg += 'Permission denied.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg += 'Location information is unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg += 'The request to get user location timed out.';
+                            break;
+                        default:
+                            errorMsg += 'An unknown error occurred.';
+                            break;
+                    }
+
+                    gpsIndicator.innerHTML = '<i class="fas fa-satellite gps-icon"></i> GPS Error';
+                    gpsIndicator.classList.remove('active');
+                    addLogEntry(errorMsg + ' You can enter a starting location manually instead.', 'alert');
+                    showManualLocationModal();
+                }
+            );
+        }
+
+        // Common path for a location obtained either via GPS or manual entry.
+        function onLocationAcquired(lat, lng) {
+            // Manual override: acquiring a fresh location always interrupts
+            // an in-progress autonomous flight rather than fighting it.
+            if (autonomousModeActive) {
+                stopAutonomousMode();
+                addLogEntry('Autonomous Mode stopped: new location set manually.', 'info');
+            }
+            lastKnownLocation = { lat, lng };
+            gpsIndicator.innerHTML = `<i class="fas fa-satellite gps-icon"></i> GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            gpsIndicator.classList.add('active');
+
+            map.setView([lat, lng], 16);
+
+            const nearestHospital = findNearestHospital(lat, lng);
+            drawAStarRoute([lat, lng], nearestHospital.coords);
+            fetchNearbyHospitals(lat, lng);
+
+            selectedHospital.textContent = nearestHospital.name;
+            const distance = calculateDistance(lat, lng, nearestHospital.coords[0], nearestHospital.coords[1]).toFixed(1);
+            hospitalDistance.textContent = `Distance: ${distance} km`;
+            hospitalInfo.style.display = 'block';
+
+            addLogEntry(`Current location acquired: ${lat.toFixed(6)}, ${lng.toFixed(6)}`, 'success');
+            addLogEntry(`Nearest hospital: ${nearestHospital.name} (${distance} km)`, 'info');
+
+            startSimBtn.disabled = false;
+
+            socket.emit('updateDroneData', {
+                roomId: myRoomId,
+                ambulance: { lat: lat, lng: lng },
+                drone: { lat: lat, lng: lng } // Drone starts at ambulance location
+            });
+        }
+
+        // Fetch hospitals near a point from OpenStreetMap (via the server's
+        // Overpass proxy) and plot them as labeled markers on the map.
+        async function fetchNearbyHospitals(lat, lng, radiusMeters = 10000) {
+            hospitalMarkers.forEach(m => map.removeLayer(m));
+            hospitalMarkers = [];
+
+            try {
+                const res = await fetch(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to fetch nearby hospitals.');
+                }
+                (data.hospitals || []).forEach(h => {
+                    const marker = L.marker([h.lat, h.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-icon',
+                            html: '<i class="fas fa-hospital" style="font-size: 20px; color: var(--hospital);"></i>',
+                            iconSize: [24, 24]
+                        })
+                    }).addTo(map);
+                    marker.bindPopup(`<strong>${h.name}</strong>`);
+                    hospitalMarkers.push(marker);
+                });
+                addLogEntry(`Found ${data.hospitals.length} hospital(s) within ${(radiusMeters / 1000).toFixed(0)}km (OpenStreetMap).`, 'info');
+            } catch (err) {
+                console.error('Nearby hospital lookup failed:', err);
+                addLogEntry(`Could not load nearby hospitals: ${err.message}`, 'alert');
             }
         }
-        
-        // Create road route using OSRM
-        function createRoadRoute(start, end) {
-            // Clear any existing route
-            if (routingControl) {
-                map.removeControl(routingControl);
+
+        // Draw the actual fastest road route using the server's A* pathfinder
+        // (server.js -> routing.js), which factors the Traffic Density slider
+        // in as edge cost, instead of a straight line or a third-party router.
+        async function drawAStarRoute(start, end) {
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
             }
-            
-            // Create ambulance marker
+
             if (ambulanceMarker) map.removeLayer(ambulanceMarker);
             ambulanceMarker = L.marker(start, {
                 icon: L.divIcon({
@@ -1409,8 +1583,7 @@
                     iconSize: [40, 40]
                 })
             }).addTo(map);
-            
-            // Create hospital marker
+
             if (hospitalMarker) map.removeLayer(hospitalMarker);
             hospitalMarker = L.marker(end, {
                 icon: L.divIcon({
@@ -1419,37 +1592,7 @@
                     iconSize: [50, 50]
                 })
             }).addTo(map);
-            
-            // Create routing control
-            routingControl = L.Routing.control({
-                waypoints: [
-                    L.latLng(start[0], start[1]),
-                    L.latLng(end[0], end[1])
-                ],
-                routeWhileDragging: false,
-                showAlternatives: false,
-                lineOptions: {
-                    styles: [{color: '#2a9d8f', weight: 6, opacity: 0.8}]
-                },
-                createMarker: function() { return null; }
-            }).addTo(map);
-            
-            // When route is found
-            routingControl.on('routesfound', function(e) {
-                const routes = e.routes;
-                if (routes && routes.length > 0) {
-                    const route = routes[0];
-                    routeWaypoints = route.coordinates;
-                    
-                    // Calculate distance
-                    const distance = (route.summary.totalDistance / 1000).toFixed(1);
-                    document.getElementById('distance-covered').textContent = distance;
-                    
-                    addLogEntry(`Road route calculated: ${distance} km`, 'success');
-                }
-            });
-            
-            // Create drone marker
+
             droneMarker = L.marker(start, {
                 icon: L.divIcon({
                     className: 'drone-marker',
@@ -1457,8 +1600,7 @@
                     iconSize: [30, 30]
                 })
             });
-            
-            // Create drone guidance effect
+
             droneGuidance = L.marker(start, {
                 icon: L.divIcon({
                     className: 'drone-guidance',
@@ -1466,8 +1608,161 @@
                     iconSize: [30, 30]
                 })
             });
+
+            const trafficDensity = parseInt(document.getElementById('traffic-density').value, 10) || 0;
+            addLogEntry('Calculating fastest road route (A*)...', 'info');
+
+            try {
+                const res = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start: { lat: start[0], lng: start[1] },
+                        end: { lat: end[0], lng: end[1] },
+                        trafficDensity
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Route calculation failed.');
+                }
+
+                routeWaypoints = data.path.map(p => L.latLng(p[0], p[1]));
+                routePolyline = L.polyline(routeWaypoints, {
+                    color: '#2a9d8f', weight: 6, opacity: 0.8
+                }).addTo(map);
+
+                document.getElementById('distance-covered').textContent = data.distanceKm.toFixed(1);
+                addLogEntry(`Road route calculated: ${data.distanceKm.toFixed(1)} km, ETA ${data.etaMinutes.toFixed(1)} min`, 'success');
+                return data;
+            } catch (err) {
+                console.error('A* route request failed:', err);
+                addLogEntry(`Road routing unavailable (${err.message}); using a direct line instead.`, 'alert');
+                // Fallback so the simulation can still run if the routing
+                // service (or its OpenStreetMap data source) is unreachable.
+                routeWaypoints = [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])];
+                routePolyline = L.polyline(routeWaypoints, {
+                    color: '#e76f51', weight: 4, opacity: 0.7, dashArray: '8, 8'
+                }).addTo(map);
+                const distance = calculateDistance(start[0], start[1], end[0], end[1]);
+                document.getElementById('distance-covered').textContent = distance.toFixed(1);
+                return { path: [start, end], distanceKm: distance, etaMinutes: (distance / 40) * 60 };
+            }
         }
-        
+
+        // --- Autonomous Drone Operations (Feature #7) ---
+        // Calculates a route (via the A* endpoint) to the nearest hospital
+        // and animates the drone along it automatically, updating ETA and
+        // distance-remaining as it flies. Manual override (Clear Path, or
+        // acquiring a new location) always stops it immediately.
+        document.getElementById('autonomous-mode-toggle').addEventListener('click', function() {
+            if (autonomousModeActive) {
+                stopAutonomousMode();
+                addLogEntry('Autonomous Mode disabled by operator.', 'info');
+            } else {
+                startAutonomousMode();
+            }
+        });
+
+        async function startAutonomousMode() {
+            if (!lastKnownLocation) {
+                alert('Set a starting location first (Get Current Location) before enabling Autonomous Mode.');
+                return;
+            }
+
+            autonomousModeActive = true;
+            const btn = document.getElementById('autonomous-mode-toggle');
+            btn.innerHTML = '<i class="fas fa-stop"></i> Disable Autonomous Mode';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-danger');
+            document.getElementById('autonomous-status').style.display = 'block';
+
+            addLogEntry('Autonomous Mode enabled: calculating route to nearest hospital...', 'info');
+
+            const nearestHospital = findNearestHospital(lastKnownLocation.lat, lastKnownLocation.lng);
+            const routeData = await drawAStarRoute([lastKnownLocation.lat, lastKnownLocation.lng], nearestHospital.coords);
+
+            // The operator may have disabled autonomous mode while the route
+            // request was in flight.
+            if (!autonomousModeActive) return;
+
+            animateAutonomousPath(routeData);
+        }
+
+        function stopAutonomousMode() {
+            autonomousModeActive = false;
+            if (autonomousAnimationHandle) {
+                cancelAnimationFrame(autonomousAnimationHandle);
+                autonomousAnimationHandle = null;
+            }
+            const btn = document.getElementById('autonomous-mode-toggle');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-robot"></i> Enable Autonomous Mode';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-success');
+            }
+            const statusEl = document.getElementById('autonomous-status');
+            if (statusEl) statusEl.style.display = 'none';
+        }
+
+        function animateAutonomousPath(routeData) {
+            const path = routeWaypoints; // populated by drawAStarRoute, L.LatLng[]
+            if (!path || path.length < 2) {
+                addLogEntry('No route available for autonomous navigation.', 'alert');
+                stopAutonomousMode();
+                return;
+            }
+
+            if (!map.hasLayer(droneMarker)) droneMarker.addTo(map);
+            if (!map.hasLayer(droneGuidance)) droneGuidance.addTo(map);
+
+            const totalDistanceKm = routeData.distanceKm;
+            const speedKmh = 40; // matches routing.js's baseSpeedKmh assumption
+            const simSpeedMultiplier = 25; // animate faster than real-time for the demo
+
+            let segmentIndex = 0;
+            let segmentStartTime = performance.now();
+            let coveredKm = 0;
+
+            function frame(now) {
+                if (!autonomousModeActive) return;
+                if (segmentIndex >= path.length - 1) {
+                    addLogEntry('Autonomous drone arrived at destination.', 'success');
+                    stopAutonomousMode();
+                    return;
+                }
+
+                const from = path[segmentIndex];
+                const to = path[segmentIndex + 1];
+                const segmentKm = calculateDistance(from.lat, from.lng, to.lat, to.lng);
+                const segmentDurationMs = Math.max(60, (segmentKm / speedKmh) * 3600 * 1000 / simSpeedMultiplier);
+
+                const elapsed = now - segmentStartTime;
+                const progress = Math.min(1, segmentDurationMs > 0 ? elapsed / segmentDurationMs : 1);
+
+                const lat = from.lat + (to.lat - from.lat) * progress;
+                const lng = from.lng + (to.lng - from.lng) * progress;
+                droneMarker.setLatLng([lat, lng]);
+                droneGuidance.setLatLng([lat, lng]);
+                ambulanceMarker.setLatLng([lat, lng]);
+                createGuideLine(ambulanceMarker.getLatLng(), [lat, lng]);
+
+                const remainingKm = Math.max(0, totalDistanceKm - (coveredKm + segmentKm * progress));
+                document.getElementById('autonomous-eta').textContent = ((remainingKm / speedKmh) * 60).toFixed(1);
+                document.getElementById('autonomous-distance-remaining').textContent = remainingKm.toFixed(2);
+
+                if (progress >= 1) {
+                    coveredKm += segmentKm;
+                    segmentIndex++;
+                    segmentStartTime = now;
+                }
+
+                autonomousAnimationHandle = requestAnimationFrame(frame);
+            }
+
+            autonomousAnimationHandle = requestAnimationFrame(frame);
+        }
+
         // Find nearest hospital
         function findNearestHospital(lat, lng) {
             let nearest = null;
@@ -1825,17 +2120,19 @@
             addLogEntry('Initiating video call with doctor...', 'info');
         });
 
-        // Emergency call simulation
+        // Emergency call: raises a real request in the server's queue (so an
+        // available doctor can Accept it from the doctor panel), and also
+        // plays out the local dispatch simulation for visual feedback.
         document.getElementById("trigger-emergency").addEventListener("click", function () {
             addLogEntry("🚨 Emergency 108 call received!", "alert");
-            
-            // Simulate current location
-            getCurrentLocation();
-            
+
+            requestEmergencyAssistance();
+            requestLocation();
+
             setTimeout(() => {
                 addLogEntry("🛫 Dispatching drone to accident site...", "info");
                 startSimulation();
-                
+
                 setTimeout(() => {
                     deployDrone();
 
@@ -1848,6 +2145,40 @@
                     }, 5000);
                 }, 3000);
             }, 2000);
+        });
+
+        // --- Doctor call assignment (Feature #3) ---
+        // Puts this drone's emergency into a server-side queue instead of
+        // letting any doctor self-select the call. A doctor's Accept on
+        // their panel triggers 'assignedDoctor' back to this exact socket
+        // with the unique roomId to use for GPS + video, so only that
+        // doctor ever sees this drone's data.
+        let lastKnownLocation = null;
+
+        function requestEmergencyAssistance() {
+            const myUserId = localStorage.getItem('myUserId');
+            socket.emit('requestEmergency', {
+                droneUserId: myUserId,
+                operatorName: droneOperatorName,
+                location: lastKnownLocation
+            });
+            addLogEntry('Emergency request sent to dispatch. Waiting for a doctor to accept...', 'info');
+        }
+
+        socket.on('emergencyRequestCreated', ({ roomId }) => {
+            // The server already joined this socket to its own room for
+            // this request; switch GPS/video emits over to it right away.
+            myRoomId = roomId;
+            addLogEntry(`Emergency request queued (ref: ${roomId.slice(0, 8)}).`, 'info');
+        });
+
+        socket.on('assignedDoctor', (connection) => {
+            myRoomId = connection.roomId;
+            localStorage.setItem('currentConnection', JSON.stringify(connection));
+            doctorName = connection.doctorName;
+            videoCallHeaderText.textContent = `Video Call with ${doctorName}`;
+            addLogEntry(`Doctor ${doctorName} accepted your call and is now connected.`, 'success');
+            alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
         });
 
         document.getElementById("doctor-close-panel").addEventListener("click", function () {
