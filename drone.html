@@ -1528,26 +1528,19 @@
     const socket = io(); // Connect to the Socket.IO server
     
     // Kurnool city coordinates
-    const KURNOOL_COORDS = [15.8281, 78.0373];
-    
-    // Define hospitals in Kurnool with provided coordinates
-    const HOSPITALS = [
-        { name: "KIMS Hospital", coords: [15.8132, 78.0570], type: "hospital" },
-        { name: "OMNI Hospitals", coords: [15.82346, 78.04138], type: "hospital" },
-        { name: "Government General Hospital", coords: [15.8203, 78.0367], type: "hospital" },
-        { name: "Vijaya Hospital", coords: [15.8320, 78.0402], type: "hospital" },
-        { name: "Arunodhaya Hospital", coords: [15.8226, 78.0381], type: "hospital" },
-        { name: "Shiva Hospital", coords: [15.8284, 78.0426], type: "hospital" },
-        { name: "Rama Hospitals", coords: [15.8220, 78.0409], type: "hospital" },
-        { name: "Sanjeevani Multispeciality Hospital", coords: [15.8314, 78.0390], type: "hospital" },
-        { name: "Hope Hospitals", coords: [15.8253, 78.0441], type: "hospital" },
-        { name: "Care Hospital", coords: [15.8178, 78.0446], type: "hospital" },
-        { name: "Sree Ram Hospital", coords: [15.8307, 78.0411], type: "hospital" },
-        { name: "Uday Hospital", coords: [15.8210, 78.0350], type: "hospital" },
-        { name: "Aarogya Hospital", coords: [15.8250, 78.0376], type: "hospital" },
-        { name: "Bhadra Hospital", coords: [15.8174, 78.0425], type: "hospital" },
-        { name: "Sri Sai Super Speciality Hospital", coords: [15.8289, 78.0455], type: "hospital" }  
-    ];
+    // Only used as the map's initial view before a real location is
+    // acquired (GPS or manual entry) -- it has no effect on hospital
+    // lookup or routing, both of which are driven entirely by the
+    // operator's actual coordinates via OpenStreetMap (see
+    // fetchNearbyHospitals / findNearestHospital below), so the app works
+    // anywhere, not just Kurnool.
+    const DEFAULT_MAP_CENTER = [15.8281, 78.0373];
+
+    // Populated by fetchNearbyHospitals() from the live OpenStreetMap
+    // Overpass lookup around the operator's actual location; this is what
+    // findNearestHospital() searches, replacing what used to be a
+    // hardcoded Kurnool-only hospital list.
+    let nearbyHospitals = [];
 
     // Initialize the application
     function initializeApp() {
@@ -1603,19 +1596,10 @@
             videoCallHeaderText.textContent = `Video Call with Doctor`;
         }
         
-        // Add hospital markers to map
-        HOSPITALS.forEach(hospital => {
-            const marker = L.marker(hospital.coords, {
-                icon: L.divIcon({
-                    className: 'custom-icon',
-                    html: '<i class="fas fa-hospital" style="font-size: 24px; color: var(--hospital);"></i>',
-                    iconSize: [30, 30]
-                })
-            }).addTo(map);
-            
-            marker.bindPopup(`<strong>${hospital.name}</strong>`);
-        });
-        
+        // Real hospital markers are plotted dynamically once a location is
+        // known (see fetchNearbyHospitals, called from onLocationAcquired)
+        // rather than a hardcoded list here, so this works anywhere.
+
         // Get current location when button clicked (shows the permission
         // explainer first; see requestLocation()).
         getLocationBtn.addEventListener('click', function() {
@@ -1733,7 +1717,7 @@
         }
 
         // Common path for a location obtained either via GPS or manual entry.
-        function onLocationAcquired(lat, lng) {
+        async function onLocationAcquired(lat, lng) {
             // Manual override: acquiring a fresh location always interrupts
             // an in-progress autonomous flight rather than fighting it.
             if (autonomousModeActive) {
@@ -1745,18 +1729,28 @@
             gpsIndicator.classList.add('active');
 
             map.setView([lat, lng], 16);
-
-            const nearestHospital = findNearestHospital(lat, lng);
-            drawAStarRoute([lat, lng], nearestHospital.coords);
-            fetchNearbyHospitals(lat, lng);
-
-            selectedHospital.textContent = nearestHospital.name;
-            const distance = calculateDistance(lat, lng, nearestHospital.coords[0], nearestHospital.coords[1]).toFixed(1);
-            hospitalDistance.textContent = `Distance: ${distance} km`;
-            hospitalInfo.style.display = 'block';
-
             addLogEntry(`Current location acquired: ${lat.toFixed(6)}, ${lng.toFixed(6)}`, 'success');
-            addLogEntry(`Nearest hospital: ${nearestHospital.name} (${distance} km)`, 'info');
+
+            // Real hospitals near THIS location, wherever it is -- must
+            // finish before picking a "nearest" one, since that used to
+            // search a Kurnool-only list regardless of where the operator
+            // actually was.
+            await fetchNearbyHospitals(lat, lng);
+            const nearestHospital = findNearestHospital(lat, lng);
+
+            if (!nearestHospital) {
+                selectedHospital.textContent = 'None found nearby';
+                hospitalDistance.textContent = '';
+                hospitalInfo.style.display = 'block';
+                addLogEntry('No hospital found near this location; drone can still be deployed manually.', 'alert');
+            } else {
+                drawAStarRoute([lat, lng], nearestHospital.coords);
+                selectedHospital.textContent = nearestHospital.name;
+                const distance = calculateDistance(lat, lng, nearestHospital.coords[0], nearestHospital.coords[1]).toFixed(1);
+                hospitalDistance.textContent = `Distance: ${distance} km`;
+                hospitalInfo.style.display = 'block';
+                addLogEntry(`Nearest hospital: ${nearestHospital.name} (${distance} km)`, 'info');
+            }
 
             startSimBtn.disabled = false;
 
@@ -1796,17 +1790,39 @@
 
         // Fetch hospitals near a point from OpenStreetMap (via the server's
         // Overpass proxy) and plot them as labeled markers on the map.
+        // Fetches real hospitals near (lat, lng) from OpenStreetMap (via the
+        // server's Overpass proxy), plots them as markers, caches them in
+        // nearbyHospitals for findNearestHospital() to search, and returns
+        // the list. Widens the search radius once if the first attempt
+        // finds nothing (e.g. a rural area), since giving up at a fixed
+        // 10km would otherwise leave the operator with no hospital option
+        // at all in less built-up parts of the country.
         async function fetchNearbyHospitals(lat, lng, radiusMeters = 10000) {
             hospitalMarkers.forEach(m => map.removeLayer(m));
             hospitalMarkers = [];
+            nearbyHospitals = [];
 
+            let hospitals = [];
             try {
-                const res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
-                const data = await res.json();
+                let res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
+                let data = await res.json();
                 if (!res.ok) {
                     throw new Error(data.error || 'Failed to fetch nearby hospitals.');
                 }
-                (data.hospitals || []).forEach(h => {
+                hospitals = data.hospitals || [];
+
+                if (hospitals.length === 0 && radiusMeters < 50000) {
+                    const widerRadius = 50000;
+                    addLogEntry(`No hospitals found within ${(radiusMeters / 1000).toFixed(0)}km, widening search to ${(widerRadius / 1000).toFixed(0)}km...`, 'info');
+                    res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${widerRadius}`);
+                    data = await res.json();
+                    if (res.ok) {
+                        hospitals = data.hospitals || [];
+                        radiusMeters = widerRadius;
+                    }
+                }
+
+                hospitals.forEach(h => {
                     const marker = L.marker([h.lat, h.lng], {
                         icon: L.divIcon({
                             className: 'custom-icon',
@@ -1817,11 +1833,20 @@
                     marker.bindPopup(`<strong>${h.name}</strong>`);
                     hospitalMarkers.push(marker);
                 });
-                addLogEntry(`Found ${data.hospitals.length} hospital(s) within ${(radiusMeters / 1000).toFixed(0)}km (OpenStreetMap).`, 'info');
+
+                nearbyHospitals = hospitals.map(h => ({ name: h.name, coords: [h.lat, h.lng] }));
+
+                if (hospitals.length === 0) {
+                    addLogEntry(`No hospitals found within ${(radiusMeters / 1000).toFixed(0)}km of this location.`, 'alert');
+                } else {
+                    addLogEntry(`Found ${hospitals.length} hospital(s) within ${(radiusMeters / 1000).toFixed(0)}km (OpenStreetMap).`, 'info');
+                }
             } catch (err) {
                 console.error('Nearby hospital lookup failed:', err);
                 addLogEntry(`Could not load nearby hospitals after retrying: ${err.message}`, 'alert');
             }
+
+            return nearbyHospitals;
         }
 
         // Draw the actual fastest road route using the server's A* pathfinder
@@ -1938,6 +1963,11 @@
             addLogEntry('Autonomous Mode enabled: calculating route to nearest hospital...', 'info');
 
             const nearestHospital = findNearestHospital(lastKnownLocation.lat, lastKnownLocation.lng);
+            if (!nearestHospital) {
+                addLogEntry('No known hospital near this location to route to; disabling Autonomous Mode.', 'alert');
+                stopAutonomousMode();
+                return;
+            }
             const routeData = await drawAStarRoute([lastKnownLocation.lat, lastKnownLocation.lng], nearestHospital.coords);
 
             // The operator may have disabled autonomous mode while the route
@@ -2021,19 +2051,25 @@
             autonomousAnimationHandle = requestAnimationFrame(frame);
         }
 
-        // Find nearest hospital
+        // Find the nearest hospital among the live OpenStreetMap results
+        // (nearbyHospitals, populated by fetchNearbyHospitals for the
+        // operator's actual location) instead of a hardcoded list, so this
+        // works anywhere -- Vijayawada, or anywhere else in India or
+        // beyond, not just Kurnool. Returns null if none are known yet
+        // (e.g. the lookup hasn't completed, or genuinely found nothing
+        // within its search radius).
         function findNearestHospital(lat, lng) {
             let nearest = null;
             let minDistance = Infinity;
-            
-            HOSPITALS.forEach(hospital => {
+
+            nearbyHospitals.forEach(hospital => {
                 const distance = calculateDistance(lat, lng, hospital.coords[0], hospital.coords[1]);
                 if (distance < minDistance) {
                     minDistance = distance;
                     nearest = hospital;
                 }
             });
-            
+
             return nearest;
         }
         
@@ -2580,34 +2616,26 @@
     
     // Initialize the map
     function initMap() {
-        // Create the map centered on Kurnool
         // zoomControl is moved to the bottom-right (where Leaflet already
         // stacks controls cleanly above its attribution) because the
         // default top-left position overlaps the GPS indicator, which
         // also lives in that corner.
-        map = L.map('map', { zoomControl: false }).setView(KURNOOL_COORDS, 14);
+        map = L.map('map', { zoomControl: false }).setView(DEFAULT_MAP_CENTER, 14);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-        
+
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
-        
-        // Add Kurnool city label
-        L.marker(KURNOOL_COORDS, {
-            icon: L.divIcon({
-                className: 'city-label',
-                html: '<div style="font-size: 16px; font-weight: bold; color: white; text-shadow: 1px 1px 3px black;">KURNOOL</div>',
-                iconSize: [0, 0]
-            })
-        }).addTo(map);
-        
-        // Add traffic layer
+
+        // Add traffic layer (purely cosmetic placeholder vehicles around
+        // the initial view; this has no bearing on hospital lookup or
+        // routing, both of which use the operator's real location)
         const trafficLayer = L.layerGroup().addTo(map);
         for (let i = 0; i < 50; i++) {
             const offsetLat = (Math.random() - 0.5) * 0.1;
             const offsetLng = (Math.random() - 0.5) * 0.1;
-            const vehiclePos = [KURNOOL_COORDS[0] + offsetLat, KURNOOL_COORDS[1] + offsetLng];
+            const vehiclePos = [DEFAULT_MAP_CENTER[0] + offsetLat, DEFAULT_MAP_CENTER[1] + offsetLng];
             
             const vehicleType = Math.random() > 0.5 ? "car" : "bike";
             const iconHtml = vehicleType === "car" ? 
