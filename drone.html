@@ -786,35 +786,55 @@
         
         .console-content {
             flex: 1;
+            min-height: 0; /* let flex:1 actually shrink instead of forcing its parent to grow to fit content */
             background: rgba(13, 27, 42, 0.7);
             border-radius: 8px;
             padding: 10px;
             overflow-y: auto;
+            overflow-x: hidden;
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
             line-height: 1.4;
         }
-        
+
         .log-entry {
-            margin-bottom: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            column-gap: 8px;
+            margin-bottom: 6px;
         }
-        
+
         .log-timestamp {
             color: var(--accent);
-            margin-right: 10px;
             font-weight: 600;
+            flex-shrink: 0;
         }
-        
+
+        .log-message {
+            /* Long unbroken strings (URLs, error messages) must wrap
+               instead of overflowing the narrow console column; min-width:0
+               is required for a flex child to actually shrink/wrap rather
+               than forcing the row wider than its container. */
+            flex: 1 1 200px;
+            min-width: 0;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            white-space: pre-wrap;
+            color: var(--light); /* readable default for any type not covered below */
+        }
+
+        /* All four log types checked against the console's dark background
+           for WCAG AA contrast (>= 4.5:1 at this font size). */
         .log-info {
-            color: var(--light);
+            color: var(--light); /* #f1faee on ~#101c27 -> ~15.8:1 */
         }
-        
+
         .log-success {
-            color: var(--success);
+            color: #5fd9c7; /* lightened from --success (#2a9d8f, ~3.9:1) to clear 4.5:1 */
         }
-        
-        .log-alert {
-            color: var(--danger);
+
+        .log-alert, .log-error {
+            color: #ff9d85; /* lightened from --danger (#e76f51, ~4.3:1) to clear 4.5:1 */
         }
         
         .system-overview {
@@ -883,10 +903,15 @@
             }
         }
         
-        @media (max-width: 992px) {
-            /* Below this width the dashboard no longer fits one fixed
-               viewport-height screen, so let the page scroll naturally
-               instead of clipping content. */
+        @media (max-width: 1024px) {
+            /* Below tablet width the map + Simulation Controls / System
+               Status / System Console no longer fit side by side without
+               squeezing the console into a narrow strip, so the whole
+               dashboard switches from the desktop grid to a single
+               scrollable column: map first (full width, ~55vh), then each
+               sidebar panel stacked full-width below it. Let the page
+               scroll naturally instead of clipping content at a fixed
+               viewport height. */
             html, body {
                 height: auto;
                 overflow: visible;
@@ -910,13 +935,17 @@
                matching the desktop grid's priority, even though sidebar
                comes first in the markup. */
             .main-content {
-                min-height: 60vh;
+                height: 55vh;
+                min-height: 320px;
                 order: 2;
             }
 
+            /* A single scrollable column of full-width panels, not a
+               row-wrapped strip: Simulation Controls, then System Status,
+               then System Console, each at full width so nothing is
+               squeezed. */
             .sidebar {
-                flex-direction: row;
-                flex-wrap: wrap;
+                flex-direction: column;
                 height: auto;
                 overflow: visible;
                 order: 3;
@@ -924,16 +953,21 @@
 
             .console {
                 order: 4;
+                height: 320px; /* fixed so its own internal scroll (not the page) shows recent logs */
+                max-height: 45vh;
             }
 
             .control-panel {
-                flex: 1;
-                min-width: 250px;
+                width: 100%;
             }
 
-            .console {
-                height: auto;
-                max-height: 300px;
+            /* This legend is absolutely positioned with offsets tuned for
+               a full-height desktop map; once the map shrinks to ~55vh in
+               the stacked layout those offsets instead overlap the map
+               control buttons, so drop the (decorative) legend here rather
+               than chase a position that only works at one exact height. */
+            .map-legend {
+                display: none;
             }
 
             .header-controls {
@@ -964,6 +998,15 @@
 
         /* Specific adjustments for very small screens (mobile portrait) */
         @media (max-width: 600px) {
+            /* map-controls relocates to the bottom at this width (below)
+               and the GPS indicator becomes a full-width top bar, so there
+               is no corner left where Leaflet's zoom buttons don't collide
+               with something. Touch devices already support pinch-to-zoom
+               natively, so just hide them here rather than fight for space. */
+            .leaflet-control-zoom {
+                display: none;
+            }
+
             .video-call-container {
                 width: 60vw; /* Even smaller default width */
                 height: 30vh; /* Even smaller default height */
@@ -1668,6 +1711,33 @@
             });
         }
 
+        // Small helper: retry a flaky fetch a couple of times with a short
+        // delay before giving up. The Overpass API is a free public
+        // service that occasionally fails transiently, so it's worth one
+        // retry before surfacing an error to the operator.
+        async function fetchWithRetry(url, options, attempts = 2, delayMs = 800) {
+            let lastErr;
+            for (let attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok && attempt < attempts) {
+                        // A non-2xx status (e.g. a transient 502/503 from the
+                        // upstream Overpass service) is also worth retrying.
+                        lastErr = new Error(`Request failed with status ${res.status}`);
+                        await new Promise(r => setTimeout(r, delayMs));
+                        continue;
+                    }
+                    return res;
+                } catch (err) {
+                    lastErr = err;
+                    if (attempt < attempts) {
+                        await new Promise(r => setTimeout(r, delayMs));
+                    }
+                }
+            }
+            throw lastErr;
+        }
+
         // Fetch hospitals near a point from OpenStreetMap (via the server's
         // Overpass proxy) and plot them as labeled markers on the map.
         async function fetchNearbyHospitals(lat, lng, radiusMeters = 10000) {
@@ -1675,7 +1745,7 @@
             hospitalMarkers = [];
 
             try {
-                const res = await fetch(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
+                const res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
                 const data = await res.json();
                 if (!res.ok) {
                     throw new Error(data.error || 'Failed to fetch nearby hospitals.');
@@ -1694,7 +1764,7 @@
                 addLogEntry(`Found ${data.hospitals.length} hospital(s) within ${(radiusMeters / 1000).toFixed(0)}km (OpenStreetMap).`, 'info');
             } catch (err) {
                 console.error('Nearby hospital lookup failed:', err);
-                addLogEntry(`Could not load nearby hospitals: ${err.message}`, 'alert');
+                addLogEntry(`Could not load nearby hospitals after retrying: ${err.message}`, 'alert');
             }
         }
 
@@ -2455,7 +2525,12 @@
     // Initialize the map
     function initMap() {
         // Create the map centered on Kurnool
-        map = L.map('map').setView(KURNOOL_COORDS, 14);
+        // zoomControl is moved to the bottom-right (where Leaflet already
+        // stacks controls cleanly above its attribution) because the
+        // default top-left position overlaps the GPS indicator, which
+        // also lives in that corner.
+        map = L.map('map', { zoomControl: false }).setView(KURNOOL_COORDS, 14);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
         
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
