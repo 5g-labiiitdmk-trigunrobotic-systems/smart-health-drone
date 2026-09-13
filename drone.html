@@ -1191,7 +1191,7 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
 <script>
     // Initialize variables
@@ -1255,6 +1255,19 @@
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
         let droneOperatorName = "Ambulance Drone";
         let doctorName = "Doctor";
+        // Unique per-pairing room, assigned by the server when this drone
+        // operator connected to a doctor from the portal page. Falls back to
+        // a per-tab random id so testing without going through the portal
+        // doesn't accidentally join a shared/global room.
+        const myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+
+        // Join this pairing's own room instead of a hardcoded global one, so
+        // GPS/video data never crosses over between simultaneous drone/doctor pairs.
+        const joinMyRoom = () => socket.emit('join', myRoomId);
+        if (socket.connected) {
+            joinMyRoom();
+        }
+        socket.on('connect', joinMyRoom);
 
         if (currentConnection && currentConnection.role === 'droneOperator') {
             droneOperatorName = currentConnection.operatorName;
@@ -1344,8 +1357,9 @@
                         
                         startSimBtn.disabled = false;
 
-                        // Emit GPS data to server for doctor.html
+                        // Emit GPS data to server for doctor.html, scoped to this pairing's room
                         socket.emit('updateDroneData', {
+                            roomId: myRoomId,
                             ambulance: { lat: lat, lng: lng },
                             drone: { lat: lat, lng: lng } // Drone starts at ambulance location
                         });
@@ -1534,8 +1548,9 @@
                     createGuideLine(ambulanceMarker.getLatLng(), [lat, lng]);
                 }
 
-                // Emit updated GPS data
+                // Emit updated GPS data, scoped to this pairing's room
                 socket.emit('updateDroneData', {
+                    roomId: myRoomId,
                     ambulance: ambulanceMarker.getLatLng(),
                     drone: droneMarker.getLatLng()
                 });
@@ -1740,26 +1755,41 @@
         setInterval(updateSimulationTime, 1000);
 
         // Start video call with doctor
-        startVideoCallBtn.addEventListener('click', function() {
+        startVideoCallBtn.addEventListener('click', async function() {
             videoCallContainer.style.display = 'flex';
             callStatusIndicator.style.backgroundColor = 'orange';
             callStatusText.textContent = 'Connecting...';
-            
-            // Initialize ZegoCloud video call
-            const roomID = '108_emergency'; // Fixed room ID for doctor to join
+
+            // Unique room per drone/doctor pairing instead of a hardcoded
+            // '108_emergency' shared by every pair.
+            const roomID = `emergency_${myRoomId}`;
             const userID = 'drone_' + Math.floor(Math.random() * 10000);
             const userName = droneOperatorName; // Use the retrieved drone operator name
-            const appID = 1456107197;
-            const serverSecret = "0bf6256589a4b592bb50a35ef1c8b59f";
-            
-            const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-                appID, 
-                serverSecret, 
-                roomID, 
-                userID, 
-                userName
-            );
-            
+
+            let kitToken;
+            try {
+                const res = await fetch('/api/zego-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userID, roomId: roomID })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to get video call token.');
+                }
+                // The server already returns a complete, signed Token04 —
+                // use it as-is instead of the insecure client-side
+                // generateKitTokenForTest.
+                kitToken = data.token;
+            } catch (err) {
+                console.error('Video call token request failed:', err);
+                addLogEntry(`Failed to start video call: ${err.message}`, 'error');
+                callStatusIndicator.style.backgroundColor = 'red';
+                callStatusText.textContent = 'Disconnected';
+                videoCallContainer.style.display = 'none';
+                return;
+            }
+
             const zp = ZegoUIKitPrebuilt.create(kitToken);
             zp.joinRoom({
                 container: document.querySelector("#zego-video-container"),

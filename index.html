@@ -486,7 +486,7 @@
                             <select id="regSpecialization">
                                 <option value="">Select Specialization</option>
                                 <option value="Emergency Medicine">Emergency Medicine</option>
-                                <option value="Cardiology">Cardiology</soption>
+                                <option value="Cardiology">Cardiology</option>
                                 <option value="Neurology">Neurology</option>
                                 <option value="Pediatrics">Pediatrics</option>
                                 <option value="Orthopedics">Orthopedics</option>
@@ -555,6 +555,43 @@
             </div>
         </div>
     </div>
+    <!-- Login Modal -->
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeLogin">&times;</span>
+            <div class="auth-form">
+                <h2><i class="fas fa-sign-in-alt"></i> Login</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginUserId">User ID</label>
+                        <input type="text" id="loginUserId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn">Login</button>
+                    </div>
+                </form>
+                <div class="form-switch">
+                    Don't have an account? <a href="#" id="showRegisterFromLogin">Register here</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Registered Users Modal -->
+    <div class="modal" id="registeredUsersModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeRegisteredUsers">&times;</span>
+            <div class="auth-form">
+                <h2><i class="fas fa-users"></i> Registered Drones and Doctors</h2>
+                <div id="registeredUsersList" style="text-align: left; max-height: 400px; overflow-y: auto;">
+                    <p style="color: var(--accent); text-align: center;">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- User Type Selection Modal -->
     <div class="modal" id="userTypeModal">
         <div class="modal-content">
@@ -579,23 +616,12 @@
                     <label for="doctorNameSelect">Select Your Name:</label>
                     <select id="doctorNameSelect" required>
                         <option value="">-- Select Your Name --</option>
-                        <option value="Doctor1">Doctor1 (Cardiologist)</option>
-                        <option value="Doctor2">Doctor2 (General Physician)</option>
-                        <option value="Doctor3">Doctor3 (Orthopedic Surgeon)</option>
-                        <option value="Doctor4">Doctor4 (Emergency Physician)</option>
-                        <option value="Doctor5">Doctor6 (General Practitioner)</option>
-                      
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="droneToConnectSelect">Connect to Drone:</label>
                     <select id="droneToConnectSelect" required>
                         <option value="">-- Select Drone --</option>
-                        <option value="drone 1">Drone 1</option>
-                        <option value="drone 2">Drone 2</option>
-                        <option value="drone 3">Drone 3</option>
-                        <option value="drone 4">Drone 4</option>
-                        <option value="drone 5">Drone 5</option>
                     </select>
                 </div>
                 <div class="form-actions">
@@ -615,23 +641,12 @@
                     <label for="droneOperatorNameSelect">Select Your Name:</label>
                     <select id="droneOperatorNameSelect" required>
                         <option value="">-- Select Your Name --</option>
-                        <option value="drone 1">Drone 1</option>
-                        <option value="drone 2">Drone 2</option>
-                        <option value="drone 3">Drone 3</option>
-                        <option value="drone 4">Drone 4</option>
-                        <option value="drone 5">Drone 5</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="doctorToConnectSelect">Connect to Doctor:</label>
                     <select id="doctorToConnectSelect" required>
                         <option value="">-- Select Doctor --</option>
-                         <option value="">-- Select Your Name --</option>
-                        <option value="Doctor1">Doctor1 (Cardiologist)</option>
-                        <option value="Doctor2">Doctor2 (General Physician)</option>
-                        <option value="Doctor3">Doctor3 (Orthopedic Surgeon)</option>
-                        <option value="Doctor4">Doctor4 (Emergency Physician)</option>
-                        <option value="Doctor5">Doctor6 (General Practitioner)</option>
                     </select>
                 </div>
                 <div class="form-actions">
@@ -664,7 +679,6 @@
                 </ul>
                 <h3 style="color: var(--accent); margin: 25px 0 15px;">Development Team:</h3>
                 <div class="team-members-container">
-                     <div class="team-members-container">
                     <div class="team-member">
                          <img src=https://github.com/shifa2004/drone/blob/main/dr.k.krishna%20naik.png?raw=true alt="Dr. K. Krishna Naik">
                         <p><strong>Faculty Lead:</strong> Dr. K. Krishna Naik</p>
@@ -678,7 +692,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
         // Initialize Socket.IO client
         // Try connecting without specifying the full URL (let Socket.IO auto-detect)
@@ -711,6 +725,8 @@
 
         // Modal Elements
         const registerModal = document.getElementById('registerModal');
+        const loginModal = document.getElementById('loginModal');
+        const registeredUsersModal = document.getElementById('registeredUsersModal');
         const userTypeModal = document.getElementById('userTypeModal');
         const doctorConnectModal = document.getElementById('doctorConnectModal');
         const droneOperatorConnectModal = document.getElementById('droneOperatorConnectModal');
@@ -724,14 +740,16 @@
 
         // Close Buttons
         const closeRegister = document.getElementById('closeRegister');
+        const closeLogin = document.getElementById('closeLogin');
+        const closeRegisteredUsers = document.getElementById('closeRegisteredUsers');
         const closeUserType = document.getElementById('closeUserType');
         const closeDoctorConnect = document.getElementById('closeDoctorConnect');
         const closeDroneOperatorConnect = document.getElementById('closeDroneOperatorConnect');
         const closeAbout = document.getElementById('closeAbout');
 
         // Form Switch Links
-        const showRegisteredUsers = document.getElementById('showRegisteredUsers');
-        const showLogin = document.getElementById('showLogin'); // Added for the new registration code
+        const showLogin = document.getElementById('showLogin');
+        const showRegisterFromLogin = document.getElementById('showRegisterFromLogin');
 
         // User Type Selection Buttons
         const iamDroneOperatorBtn = document.getElementById('iamDroneOperatorBtn');
@@ -764,6 +782,8 @@
         // Function to close all modals
         function closeAllModals() {
             registerModal.style.display = 'none';
+            loginModal.style.display = 'none';
+            registeredUsersModal.style.display = 'none';
             userTypeModal.style.display = 'none';
             doctorConnectModal.style.display = 'none';
             droneOperatorConnectModal.style.display = 'none';
@@ -827,28 +847,28 @@
             updateConnectionStatus(false, 'Connection error. Server may be down.');
         });
 
-        // Listen for connection status updates from the server
-        socket.on('currentConnectionStatus', (connection) => {
-            console.log('Received connection status:', connection);
-            
-            // Update localStorage to keep it consistent across tabs/windows of the same browser
-            if (connection) {
-                localStorage.setItem('currentConnection', JSON.stringify(connection));
-            } else {
-                localStorage.removeItem('currentConnection');
-            }
-            updateUIWithConnection(connection);
-        });
+        // The server now supports multiple simultaneous drone/doctor pairings,
+        // each identified by its own roomId, so it broadcasts the full list of
+        // active connections rather than a single global one. Each browser only
+        // cares about the specific pairing it established (stored locally by
+        // roomId when it connected), so we just re-validate that pairing is
+        // still active and refresh the UI from it.
+        function findMyConnection(connections) {
+            const stored = JSON.parse(localStorage.getItem('currentConnection'));
+            if (!stored) return null;
+            return (connections || []).find(c => c.roomId === stored.roomId) || null;
+        }
 
-        // Request connection status from server
-        socket.on('connectionStatusResponse', (connection) => {
-            console.log('Connection status response:', connection);
-            if (connection) {
-                localStorage.setItem('currentConnection', JSON.stringify(connection));
+        // Listen for connection status updates from the server
+        socket.on('currentConnectionStatus', (connections) => {
+            console.log('Received connection status:', connections);
+            const myConnection = findMyConnection(connections);
+            if (myConnection) {
+                localStorage.setItem('currentConnection', JSON.stringify(myConnection));
             } else {
                 localStorage.removeItem('currentConnection');
             }
-            updateUIWithConnection(connection);
+            updateUIWithConnection(myConnection);
         });
 
         // Initial UI setup on page load
@@ -888,8 +908,58 @@
             e.preventDefault();
             navMenu.classList.remove('active');
             closeAllModals();
-            userTypeModal.style.display = 'block';
+            registeredUsersModal.style.display = 'block';
+            loadRegisteredUsersList();
         });
+
+        // Fetch registered users from the server and render them as a list
+        async function loadRegisteredUsersList() {
+            const listEl = document.getElementById('registeredUsersList');
+            listEl.innerHTML = '<p style="color: var(--accent); text-align: center;">Loading...</p>';
+            try {
+                const res = await fetch('/api/users');
+                const { users } = await res.json();
+                if (!users || users.length === 0) {
+                    listEl.innerHTML = '<p style="color: var(--accent); text-align: center;">No registered users yet.</p>';
+                    return;
+                }
+                const doctors = users.filter(u => u.userType === 'doctor');
+                const operators = users.filter(u => u.userType === 'drone_operator');
+
+                const renderGroup = (title, group, detailFn) => {
+                    if (group.length === 0) return '';
+                    const items = group.map(u => `<li style="margin-bottom: 10px;">
+                        <strong>${u.name}</strong> (${u.userId})<br>
+                        <span style="color: var(--accent); font-size: 0.9rem;">${detailFn(u)}</span>
+                    </li>`).join('');
+                    return `<h3 style="color: var(--accent); margin: 15px 0 10px;">${title}</h3><ul style="padding-left: 20px;">${items}</ul>`;
+                };
+
+                listEl.innerHTML =
+                    renderGroup('Doctors', doctors, u => u.specialization || 'General') +
+                    renderGroup('Drone Operators', operators, u => [u.city, u.state, u.country].filter(Boolean).join(', ') || 'Location not specified');
+            } catch (err) {
+                console.error('Failed to load registered users:', err);
+                listEl.innerHTML = '<p style="color: var(--danger); text-align: center;">Failed to load registered users.</p>';
+            }
+        }
+
+        // Populate a <select> element from the server's registered users of a given type
+        async function populateUserSelect(selectEl, userType, placeholder) {
+            selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+            try {
+                const res = await fetch(`/api/users?userType=${encodeURIComponent(userType)}`);
+                const { users } = await res.json();
+                (users || []).forEach(u => {
+                    const option = document.createElement('option');
+                    option.value = u.userId;
+                    option.textContent = `${u.name} (${u.userId})`;
+                    selectEl.appendChild(option);
+                });
+            } catch (err) {
+                console.error(`Failed to load ${userType} list:`, err);
+            }
+        }
 
         aboutLink.addEventListener('click', (e) => {
             e.preventDefault();
@@ -900,27 +970,26 @@
 
         // Close Buttons
         closeRegister.addEventListener('click', closeAllModals);
+        closeLogin.addEventListener('click', closeAllModals);
+        closeRegisteredUsers.addEventListener('click', closeAllModals);
         closeUserType.addEventListener('click', closeAllModals);
         closeDoctorConnect.addEventListener('click', closeAllModals);
         closeDroneOperatorConnect.addEventListener('click', closeAllModals);
         closeAbout.addEventListener('click', closeAllModals);
 
-        // Form Switch Links
-        // showRegisteredUsers.addEventListener('click', (e) => { // This was already present, but the new code uses 'showLogin'
-        //     e.preventDefault();
-        //     registerModal.style.display = 'none';
-        //     userTypeModal.style.display = 'block';
-        // });
-
         // User Type Selection Buttons
         iamDroneOperatorBtn.addEventListener('click', () => {
             userTypeModal.style.display = 'none';
             droneOperatorConnectModal.style.display = 'block';
+            populateUserSelect(droneOperatorNameSelect, 'drone_operator', '-- Select Your Name --');
+            populateUserSelect(doctorToConnectSelect, 'doctor', '-- Select Doctor --');
         });
 
         iamDoctorBtn.addEventListener('click', () => {
             userTypeModal.style.display = 'none';
             doctorConnectModal.style.display = 'block';
+            populateUserSelect(doctorNameSelect, 'doctor', '-- Select Your Name --');
+            populateUserSelect(droneToConnectSelect, 'drone_operator', '-- Select Drone --');
         });
 
         // Doctor Connect Button Event Listener
@@ -934,8 +1003,15 @@
                     doctorName: doctorName,
                     droneName: selectedDrone
                 };
-                // Emit connection data to the server
-                socket.emit('updateConnection', connectionData);
+                // Emit connection data to the server; the server generates a
+                // unique roomId for this pairing and acks it back so this
+                // browser (and the drone's, via the broadcast) can join the
+                // right Socket.IO room / video call room instead of a shared
+                // hardcoded one.
+                socket.emit('updateConnection', connectionData, (connection) => {
+                    localStorage.setItem('currentConnection', JSON.stringify(connection));
+                    updateUIWithConnection(connection);
+                });
                 alert(`Doctor ${doctorName} connected to Drone ${selectedDrone}!`);
                 closeAllModals();
             } else {
@@ -954,8 +1030,10 @@
                     operatorName: operatorName,
                     doctorName: selectedDoctor
                 };
-                // Emit connection data to the server
-                socket.emit('updateConnection', connectionData);
+                socket.emit('updateConnection', connectionData, (connection) => {
+                    localStorage.setItem('currentConnection', JSON.stringify(connection));
+                    updateUIWithConnection(connection);
+                });
                 alert(`Drone Operator ${operatorName} connected to Doctor ${selectedDoctor}!`);
                 closeAllModals();
             } else {
@@ -965,8 +1043,10 @@
 
         // Reset Connection Button Event Listener
         resetConnectionBtn.addEventListener('click', () => {
-            // Emit reset event to the server
-            socket.emit('resetConnection');
+            // Only reset this browser's own pairing (by roomId), not every
+            // active drone/doctor pair on the server.
+            const stored = JSON.parse(localStorage.getItem('currentConnection'));
+            socket.emit('resetConnection', stored ? stored.roomId : null);
             localStorage.removeItem('currentConnection');
             resetServiceCards();
             alert('Connection reset. You can now establish a new connection.');
@@ -974,20 +1054,13 @@
 
         // Close modal when clicking outside
         window.addEventListener('click', (e) => {
-            if (e.target === registerModal || e.target === userTypeModal || 
-                e.target === doctorConnectModal || e.target === droneOperatorConnectModal || 
+            if (e.target === registerModal || e.target === loginModal ||
+                e.target === registeredUsersModal || e.target === userTypeModal ||
+                e.target === doctorConnectModal || e.target === droneOperatorConnectModal ||
                 e.target === aboutModal) {
                 e.target.style.display = 'none';
             }
         });
-
-        // Registration Form Submission (Original)
-        // document.getElementById('registrationForm').addEventListener('submit', (e) => {
-        //     e.preventDefault();
-        //     alert('Registration successful! Please select your role to continue.');
-        //     registerModal.style.display = 'none';
-        //     userTypeModal.style.display = 'block';
-        // });
 
         // Service Card Links
         document.getElementById('droneSimulator').addEventListener('click', () => {
@@ -1005,38 +1078,53 @@
             }
         }, 5000);
 
-        // --- START OF NEW REGISTRATION CODE ---
-
-        // Initialize users from localStorage
-        let registeredUsers = JSON.parse(localStorage.getItem('registeredUsers')) || [];
-
-        // Save users to localStorage
-        function saveUsers() {
-            localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers));
-        }
+        // --- Registration / Login (server-backed) ---
 
         // Registration form conditional fields
         const regUserTypeSelect = document.getElementById('regUserType');
         const doctorFields = document.getElementById('doctorFields');
         const operatorFields = document.getElementById('operatorFields');
 
-        // Assuming a loginModal exists for switching, if not, this part needs adjustment
-        const loginModal = document.getElementById('loginModal'); // This element is not in the provided HTML, might need to be added or handled differently
-
         // Event listener for switching to login from registration
-        if (showLogin) { // Check if showLogin element exists
-            showLogin.addEventListener('click', (e) => {
-                e.preventDefault();
-                registerModal.style.display = 'none';
-                if (loginModal) { // Only try to display if loginModal exists
-                    loginModal.style.display = 'block';
-                } else {
-                    console.warn("Login modal not found. Cannot switch to login form.");
-                    // Optionally, you could redirect to a login page or show an alert
-                }
-            });
-        }
+        showLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerModal.style.display = 'none';
+            loginModal.style.display = 'block';
+        });
 
+        // Event listener for switching to registration from login
+        showRegisterFromLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginModal.style.display = 'none';
+            registerModal.style.display = 'block';
+        });
+
+        // Login form submission
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('loginUserId').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Login failed.');
+                    return;
+                }
+                alert(`Welcome back, ${data.user.name}! Please select your role to connect.`);
+                loginModal.style.display = 'none';
+                document.getElementById('loginForm').reset();
+                userTypeModal.style.display = 'block';
+            } catch (err) {
+                console.error('Login request failed:', err);
+                alert('Could not reach the server. Please try again.');
+            }
+        });
 
         // Conditional fields display based on user type selection (Registration)
         regUserTypeSelect.addEventListener('change', () => {
@@ -1078,8 +1166,8 @@
             }
         });
 
-        // Registration form submission (New)
-        document.getElementById('registrationForm').addEventListener('submit', (e) => {
+        // Registration form submission (server-backed: password is hashed server-side, never stored in localStorage)
+        document.getElementById('registrationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const regName = document.getElementById('regName').value;
             const regUserId = document.getElementById('regUserId').value;
@@ -1088,72 +1176,55 @@
             const regUserType = document.getElementById('regUserType').value;
             const regPassword = document.getElementById('regPassword').value;
             const regConfirmPassword = document.getElementById('regConfirmPassword').value;
-            const regSpecialization = document.getElementById('regSpecialization').value; // Get selected specialization
+            const regSpecialization = document.getElementById('regSpecialization').value;
 
-            // Validation
             if (regPassword !== regConfirmPassword) {
                 alert('Passwords do not match!');
                 return;
             }
 
-            // Check if User ID already exists
-            const userExists = registeredUsers.some(user => user.userId === regUserId);
-            if (userExists) {
-                alert('User ID already taken. Please choose a different one.');
-                return;
-            }
-
-            // Create new user object
             const newUser = {
                 name: regName,
                 userId: regUserId,
                 email: regEmail,
                 phone: regPhone,
                 userType: regUserType,
-                password: regPassword,
-                skills: [],
-                workDetails: '',
-                metrics: { // Initialize metrics to 0
-                    assignedCases: 0,
-                    completedTasks: 0,
-                    responseTime: 0,
-                    successRate: 100 // Default success rate
-                }
+                password: regPassword
             };
 
-            // Add conditional fields based on user type
             if (regUserType === 'doctor') {
-                newUser.specialization = regSpecialization; // Use selected specialization
+                newUser.specialization = regSpecialization;
                 newUser.license = document.getElementById('regLicense').value;
                 newUser.clinic = document.getElementById('regClinic').value;
-                newUser.metrics.onlineConsultations = 0;
-                newUser.metrics.emergencyResponses = 0;
             } else if (regUserType === 'drone_operator') {
                 newUser.city = document.getElementById('regCity').value;
                 newUser.village = document.getElementById('regVillage').value;
                 newUser.state = document.getElementById('regState').value;
                 newUser.country = document.getElementById('regCountry').value;
-                // Drone operators don't have specific metrics like flight hours in this simplified dashboard
-                // newUser.metrics.flightHours = 0;
-                // newUser.metrics.successfulMissions = 0;
             }
 
-            registeredUsers.push(newUser);
-            saveUsers();
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newUser)
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Registration failed.');
+                    return;
+                }
 
-            alert(`Registration successful! Your User ID is: ${regUserId}. You can now login.`);
-            
-            registerModal.style.display = 'none';
-            // The original code had `loginModal.style.display = 'block';` here.
-            // Since `loginModal` is not defined in the provided HTML,
-            // I'm changing it to display `userTypeModal` as per the original flow after registration.
-            userTypeModal.style.display = 'block'; 
-            
-            // document.getElementById('loginUserId').value = regUserId; // This assumes a login form exists
-            // document.getElementById('loginPassword').value = ''; // This assumes a login form exists
-            document.getElementById('registrationForm').reset(); // Clear registration form fields
+                alert(`Registration successful! Your User ID is: ${regUserId}. You can now login.`);
+                registerModal.style.display = 'none';
+                document.getElementById('loginUserId').value = regUserId;
+                loginModal.style.display = 'block';
+                document.getElementById('registrationForm').reset();
+            } catch (err) {
+                console.error('Registration request failed:', err);
+                alert('Could not reach the server. Please try again.');
+            }
         });
-        // --- END OF NEW REGISTRATION CODE ---
     </script>
 </body>
 </html>
