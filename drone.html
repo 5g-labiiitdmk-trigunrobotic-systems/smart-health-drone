@@ -43,7 +43,14 @@
         .container {
             display: grid;
             grid-template-columns: 300px 1fr;
-            grid-template-rows: 100px 1fr 300px;
+            /* The header row was a hardcoded 100px, but its logo text (up
+               to 4 lines, one of which can itself wrap depending on
+               available width) needs more than that at plenty of real
+               desktop widths -- overflow:hidden was then silently
+               clipping the top/bottom of the title instead of the row
+               growing to fit. auto lets it size to whatever the title
+               actually needs at the current width. */
+            grid-template-rows: auto 1fr 300px;
             grid-template-areas:
                 "header header"
                 "sidebar main"
@@ -52,7 +59,7 @@
             gap: 10px;
             padding: 10px;
         }
-        
+
         /* Header Styles */
         header {
             grid-area: header;
@@ -60,21 +67,27 @@
             border-radius: 15px;
             display: flex;
             align-items: center;
-            padding: 0 20px;
+            padding: 12px 20px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(168, 218, 220, 0.3);
             position: relative;
-            overflow: hidden;
             z-index: 10;
         }
-        
+
         header::before {
+            /* Rounds itself to match the header instead of relying on
+               overflow:hidden on the header (a grid item) to clip it --
+               overflow != visible on a grid/flex item makes its automatic
+               min-height resolve to 0 per spec, which silently collapsed
+               this row to ~24px (one line) at almost every desktop width
+               and clipped the rest of the 4-line logo text. */
             content: "";
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            border-radius: inherit;
             background: radial-gradient(circle at 10% 20%, rgba(230, 57, 70, 0.2) 0%, transparent 40%),
                         radial-gradient(circle at 90% 80%, rgba(168, 218, 220, 0.2) 0%, transparent 40%);
             pointer-events: none;
@@ -156,6 +169,19 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(168, 218, 220, 0.3);
             z-index: 10;
+            /* Without min-height:0, a grid item's default min-height:auto
+               is its content's full height, so whenever Simulation
+               Controls + System Status together needed more than the 1fr
+               row's share of 100vh, the ROW ITSELF grew to fit them --
+               pushing .container taller than 100vh. Since body has
+               overflow:hidden (by design, for the fixed-viewport desktop
+               dashboard) that overflow was never visible as a scrollbar;
+               it just silently clipped whatever fell off the bottom
+               (reproduced at nearly every desktop width from ~1100px up).
+               overflow-y:auto means if it's ever still too tall, the
+               sidebar scrolls internally instead of blowing out the page. */
+            min-height: 0;
+            overflow-y: auto;
         }
         
         .control-panel {
@@ -225,7 +251,7 @@
         
         .btn-group {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 10px;
             margin-top: 10px;
         }
@@ -285,21 +311,29 @@
         
         .status-item {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             padding: 10px;
             background: rgba(29, 53, 87, 0.6);
             border-radius: 8px;
             border-left: 4px solid var(--accent);
+            /* Label + value ("Traffic Conditions" + "Heavy Congestion")
+               can each be long; at in-between sidebar widths there just
+               isn't room for both on one line, so let the value wrap to
+               its own row underneath rather than overflow sideways. */
+            gap: 4px 8px;
         }
-        
+
         .status-label {
             display: flex;
             align-items: center;
             gap: 8px;
+            min-width: 0;
         }
-        
+
         .status-value {
             font-weight: 600;
+            text-align: right;
         }
         
         .status-good {
@@ -752,6 +786,15 @@
             border: 1px solid rgba(168, 218, 220, 0.3);
             display: flex;
             flex-direction: column;
+            /* console-header and .system-overview (the 3 metric cards) are
+               fixed-size flex children; at in-between sidebar widths the
+               metric cards wrap to 2 rows (see .metric-card) and their
+               combined height plus console-header can exceed the fixed
+               300px track even after .console-content shrinks to nothing.
+               Scroll the whole panel rather than silently overflowing
+               (previously invisible: it bled past .container and was
+               clipped by body's own overflow:hidden). */
+            overflow-y: auto;
         }
         
         .console-header {
@@ -839,6 +882,7 @@
         
         .system-overview {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             margin-top: 15px;
             gap: 10px;
@@ -846,6 +890,12 @@
         
         .metric-card {
             flex: 1;
+            /* A floor rather than 0: the metric value ("0:00") has no
+               break point to wrap at, so shrinking the card arbitrarily
+               narrow just clips it instead of helping. Combined with
+               .system-overview's flex-wrap, a card that doesn't fit
+               drops to its own row instead of overflowing sideways. */
+            min-width: 90px;
             background: rgba(13, 27, 42, 0.7);
             border-radius: 10px;
             padding: 15px;
@@ -1178,7 +1228,7 @@
 </button>
 </div>
 <div class="btn-group" style="margin-top: 10px;">
-<button class="btn btn-success" id="autonomous-mode-toggle">
+<button class="btn btn-success" id="autonomous-mode-toggle" style="grid-column: 1 / -1;">
 <i class="fas fa-robot"></i> Enable Autonomous Mode
 </button>
 </div>
