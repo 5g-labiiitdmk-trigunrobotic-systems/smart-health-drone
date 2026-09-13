@@ -936,6 +936,20 @@
                 max-height: 300px;
             }
 
+            .header-controls {
+                flex-wrap: wrap;
+            }
+
+            /* Keep every tappable control at (or above) the ~44px touch
+               target guideline once we're at tablet width or narrower. */
+            .btn, .map-btn, #autonomous-mode-toggle {
+                min-height: 44px;
+            }
+
+            #manual-lat, #manual-lng, #manual-location-form .btn {
+                min-height: 44px;
+            }
+
             /* Adjust video call container for mobile */
             .video-call-container {
                 width: 70vw; /* Smaller default width */
@@ -1035,6 +1049,21 @@
 
             .developer-info, .map-legend {
                 display: none; /* Frees up cramped space on phones; still shown on larger screens */
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-line-1-sub {
+                display: none;
+            }
+
+            .control-label {
+                font-size: 0.85rem;
+            }
+
+            .header-controls .btn {
+                min-width: unset;
+                width: 100%;
             }
         }
     </style>
@@ -2463,7 +2492,21 @@
             }).addTo(trafficLayer);
         }
     }
-    
+
+    // Leaflet snapshots its container's pixel size when created (or last
+    // told to check), so it won't notice the container getting bigger or
+    // smaller from a CSS media query, a phone rotating, or the on-screen
+    // keyboard opening/closing — it just keeps rendering at the old size
+    // until told otherwise. Debounced so a drag-resize doesn't thrash it.
+    let mapResizeTimeout = null;
+    function scheduleMapInvalidate() {
+        if (!map) return;
+        clearTimeout(mapResizeTimeout);
+        mapResizeTimeout = setTimeout(() => map.invalidateSize(), 200);
+    }
+    window.addEventListener('resize', scheduleMapInvalidate);
+    window.addEventListener('orientationchange', scheduleMapInvalidate);
+
     // Initial setup
     document.addEventListener('DOMContentLoaded', function() {
         initMap();

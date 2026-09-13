@@ -153,7 +153,7 @@
             overflow-x: auto;
         }
 
-        @media (max-width: 700px) {
+        @media (max-width: 768px) {
             .container {
                 padding: 15px;
             }
@@ -191,6 +191,40 @@
             th, td {
                 padding: 8px 6px;
                 font-size: 0.8rem;
+            }
+
+            /* Keep every tappable control at (or above) the ~44px touch
+               target guideline once we're at tablet width or narrower. */
+            .btn {
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .form-group input {
+                min-height: 44px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .auth-form {
+                margin: 20px auto;
+                padding: 15px;
+            }
+
+            .card h2 {
+                font-size: 1.05rem;
+            }
+
+            th, td {
+                padding: 6px 4px;
+                font-size: 0.75rem;
+            }
+
+            .badge {
+                padding: 2px 8px;
+                font-size: 0.7rem;
             }
         }
     </style>

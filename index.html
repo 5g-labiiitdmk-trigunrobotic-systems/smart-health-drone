@@ -93,6 +93,14 @@
             color: var(--light);
             font-size: 1.5rem;
             cursor: pointer;
+            /* Guarantees a visible, tappable 44x44 box even if the Font
+               Awesome icon glyph inside fails to load (slow/blocked CDN) -
+               otherwise the button collapses to 0x0 and mobile nav becomes
+               completely unreachable. */
+            min-width: 44px;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
         }
 
         .nav-menu {
@@ -333,7 +341,7 @@
         /* Responsive Styles */
         @media (max-width: 768px) {
             .nav-toggle {
-                display: block;
+                display: flex;
             }
 
             .nav-menu {
@@ -367,9 +375,40 @@
                 flex-wrap: wrap;
                 gap: 10px;
             }
+
+            /* Keep every tappable control at (or above) the ~44px touch
+               target guideline once the layout is narrow enough to be a
+               phone/tablet rather than a mouse-driven desktop. */
+            .btn, .nav-menu a, .close-modal {
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+
+            .form-group input, .form-group select {
+                min-height: 44px;
+            }
+
+            .modal-content {
+                padding: 20px;
+                margin: 5vh auto;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+
+            .form-actions {
+                justify-content: center;
+            }
+
+            .form-actions .btn {
+                width: 100%;
+            }
         }
 
-        @media (max-width: 420px) {
+        @media (max-width: 480px) {
             .logo-line-1 {
                 font-size: 0.8rem;
             }
@@ -388,6 +427,16 @@
 
             .service-card {
                 padding: 20px;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 15px;
+            }
+
+            .team-members-container {
+                flex-direction: column;
+                align-items: center;
             }
         }
 
