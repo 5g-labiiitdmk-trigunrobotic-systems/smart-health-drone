@@ -8,6 +8,8 @@
 // roads more expensive without ever making the heuristic inadmissible
 // (cost is always >= the raw geometric distance).
 
+const { queryOverpass } = require('./overpass');
+
 const EARTH_RADIUS_KM = 6371;
 
 const DRIVABLE_HIGHWAYS = new Set([
@@ -74,15 +76,7 @@ function buildGraphFromOverpassElements(elements) {
 
 async function fetchRoadGraph(bbox, fetchImpl = fetch) {
     const query = `[out:json][timeout:25];way["highway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});(._;>;);out body;`;
-    const res = await fetchImpl('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'data=' + encodeURIComponent(query)
-    });
-    if (!res.ok) {
-        throw new Error(`Overpass API request failed with status ${res.status}`);
-    }
-    const data = await res.json();
+    const data = await queryOverpass(query, { fetchImpl });
     return buildGraphFromOverpassElements(data.elements || []);
 }
 

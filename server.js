@@ -8,6 +8,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { computeRoute } = require('./routing');
+const { queryOverpass } = require('./overpass');
 
 const app = express();
 const server = http.createServer(app);
@@ -280,15 +281,7 @@ app.get('/api/hospitals', async (req, res) => {
     const query = `[out:json][timeout:25];node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});out body;`;
 
     try {
-        const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'data=' + encodeURIComponent(query)
-        });
-        if (!overpassRes.ok) {
-            throw new Error(`Overpass API returned ${overpassRes.status}`);
-        }
-        const data = await overpassRes.json();
+        const data = await queryOverpass(query);
         const hospitals = (data.elements || [])
             .filter(el => typeof el.lat === 'number' && typeof el.lon === 'number')
             .map(el => ({
