@@ -1818,7 +1818,14 @@
 
             let hospitals = [];
             try {
-                let res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`);
+                // Single attempt here (not the usual 2): the server already
+                // tries 4 independent Overpass mirrors internally for each
+                // call, so retrying the whole thing again from the client
+                // mostly just doubles the wait without meaningfully
+                // improving the odds if the underlying issue is systemic
+                // (e.g. the server's own network path, not one instance
+                // being briefly down).
+                let res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${radiusMeters}`, undefined, 1);
                 let data = await res.json();
                 if (!res.ok) {
                     throw new Error(data.error || 'Failed to fetch nearby hospitals.');
@@ -1828,7 +1835,7 @@
                 if (hospitals.length === 0 && radiusMeters < 50000) {
                     const widerRadius = 50000;
                     addLogEntry(`No hospitals found within ${(radiusMeters / 1000).toFixed(0)}km, widening search to ${(widerRadius / 1000).toFixed(0)}km...`, 'info');
-                    res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${widerRadius}`);
+                    res = await fetchWithRetry(`/api/hospitals?lat=${lat}&lng=${lng}&radius=${widerRadius}`, undefined, 1);
                     data = await res.json();
                     if (res.ok) {
                         hospitals = data.hospitals || [];
@@ -1976,6 +1983,14 @@
 
             addLogEntry('Autonomous Mode enabled: calculating route to nearest hospital...', 'info');
 
+            // Fetch fresh rather than trusting nearbyHospitals to already
+            // be populated: it's set by onLocationAcquired's own fetch,
+            // which runs concurrently with (not necessarily before) this
+            // button being clickable, so relying on the cache here hit
+            // the exact same "enabled before the async work finished" race
+            // already fixed once for Start Simulation -- just in this
+            // other place that also reads nearbyHospitals.
+            await fetchNearbyHospitals(lastKnownLocation.lat, lastKnownLocation.lng);
             const nearestHospital = findNearestHospital(lastKnownLocation.lat, lastKnownLocation.lng);
             if (!nearestHospital) {
                 addLogEntry('No known hospital near this location to route to; disabling Autonomous Mode.', 'alert');
