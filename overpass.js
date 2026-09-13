@@ -10,13 +10,14 @@
 const OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.fr/api/interpreter',
     'https://overpass.openstreetmap.ru/api/interpreter'
 ];
 
 const USER_AGENT = 'AmbulancePatrolDrone/1.0 (IIITDM Kurnool research project; contact via GitHub repo)';
 
-async function queryOverpass(query, { fetchImpl = fetch, timeoutMs = 15000 } = {}) {
-    let lastErr;
+async function queryOverpass(query, { fetchImpl = fetch, timeoutMs = 8000 } = {}) {
+    const errors = [];
     for (const endpoint of OVERPASS_ENDPOINTS) {
         try {
             const res = await fetchImpl(endpoint, {
@@ -29,7 +30,7 @@ async function queryOverpass(query, { fetchImpl = fetch, timeoutMs = 15000 } = {
                 signal: AbortSignal.timeout(timeoutMs)
             });
             if (!res.ok) {
-                lastErr = new Error(`Overpass endpoint ${endpoint} returned HTTP ${res.status}`);
+                errors.push(`${endpoint}: HTTP ${res.status}`);
                 continue;
             }
             return await res.json();
@@ -37,10 +38,14 @@ async function queryOverpass(query, { fetchImpl = fetch, timeoutMs = 15000 } = {
             // Keep the real underlying cause (e.g. DNS failure, connection
             // refused, timeout) visible in logs instead of just "fetch failed".
             const detail = err.cause ? `${err.message} (${err.cause.message || err.cause})` : err.message;
-            lastErr = new Error(`${endpoint}: ${detail}`);
+            errors.push(`${endpoint}: ${detail}`);
         }
     }
-    throw new Error(`All Overpass endpoints failed. Last error: ${lastErr.message}`);
+    // Report every endpoint's failure, not just the last -- if they're all
+    // failing the same way (e.g. every one is a connect-level timeout) that
+    // itself is a useful diagnostic pointing at the network path out of the
+    // server, not any particular Overpass instance being down.
+    throw new Error(`All Overpass endpoints failed:\n${errors.join('\n')}`);
 }
 
 module.exports = { queryOverpass, OVERPASS_ENDPOINTS };
