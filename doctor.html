@@ -319,6 +319,19 @@
             .pending-request-card {
                 width: 100%;
             }
+
+            /* Keep every tappable control at (or above) the ~44px touch
+               target guideline on tablet/phone widths. */
+            .console-controls button,
+            .pending-request-card button {
+                min-height: 44px;
+                padding: 8px 16px;
+            }
+
+            .map-section {
+                height: 45vh;
+                min-height: 280px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -327,11 +340,16 @@
             }
 
             .map-section {
-                height: 300px;
+                height: 40vh;
+                min-height: 240px;
             }
 
             .console-section {
                 height: 160px;
+            }
+
+            .video-call-container h3 {
+                font-size: 0.95rem;
             }
         }
     </style>
@@ -668,11 +686,24 @@
             addLogEntry('Console cleared.', 'info');
         });
 
+        // Leaflet snapshots its container's pixel size at creation time, so
+        // it won't notice the container resizing from a media query, a
+        // phone rotating, or the map/video panels re-stacking — it just
+        // keeps rendering at the old size until told to re-check.
+        let mapResizeTimeout = null;
+        function scheduleMapInvalidate() {
+            if (!map) return;
+            clearTimeout(mapResizeTimeout);
+            mapResizeTimeout = setTimeout(() => map.invalidateSize(), 200);
+        }
+        window.addEventListener('resize', scheduleMapInvalidate);
+        window.addEventListener('orientationchange', scheduleMapInvalidate);
+
         // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
             setInterval(updateSimulationTime, 1000);
-            
+
             // Auto-join call when page loads
             setTimeout(() => {
                 startCall();
