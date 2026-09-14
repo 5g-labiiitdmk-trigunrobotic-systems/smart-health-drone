@@ -43,46 +43,66 @@
         }
 
         /* Header Styles */
-        header {
+        header.site-header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 15px;
             padding: 15px 0;
             border-bottom: 1px solid #e0e0e0;
-            margin-bottom: 30px;
+            margin-bottom: 0;
         }
 
-        .logo {
+        .header-brands {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 18px;
+            flex-wrap: wrap;
         }
 
-        .logo-icon {
-            font-size: 2.5rem;
-            color: var(--primary);
-            animation: pulse 2s infinite;
+        .brand-block {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .logo-text {
+        .brand-logo-img {
+            height: 52px;
+            width: 52px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .brand-text {
             display: flex;
             flex-direction: column;
-            line-height: 1.2;
+            line-height: 1.25;
         }
 
-        .logo-line-1 {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--iiit-gold-text);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .logo-line-2 {
-            font-size: 1.5rem;
+        .brand-name {
+            font-size: 1.05rem;
             font-weight: 700;
-            color: var(--primary);
-            margin: 3px 0;
+            color: var(--iiit-blue);
+        }
+
+        .brand-subtitle {
+            font-size: 0.7rem;
+            color: #6b7280;
+            max-width: 260px;
+        }
+
+        .brand-subtitle-teal {
+            color: var(--accent-text);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .brand-divider {
+            width: 1px;
+            align-self: stretch;
+            background: #d9dee5;
         }
 
         /* Navigation */
@@ -90,7 +110,7 @@
             display: none;
             background: none;
             border: none;
-            color: var(--light);
+            color: var(--iiit-blue);
             font-size: 1.5rem;
             cursor: pointer;
             /* Guarantees a visible, tappable 44x44 box even if the Font
@@ -105,39 +125,160 @@
 
         .nav-menu {
             display: flex;
+            align-items: center;
             gap: 20px;
         }
 
         .nav-menu a {
-            color: var(--light);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--iiit-blue);
             text-decoration: none;
             font-weight: 500;
-            padding: 8px 15px;
+            padding: 8px 12px;
             border-radius: 5px;
             transition: all 0.3s ease;
+            font-size: 0.92rem;
         }
 
         .nav-menu a:hover {
             background: rgba(168, 218, 220, 0.2);
         }
 
-        /* Main Content */
-        .main-title {
-            text-align: center;
-            margin-bottom: 40px;
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #e6f5ef;
+            color: #1f7a5c;
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 8px 16px;
+            border-radius: 999px;
         }
 
-        .main-title h1 {
-            font-size: 2.5rem;
+        /* Hero Section */
+        .hero-section {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 30px;
+            background: linear-gradient(135deg, #f5f9fd 0%, #eaf2fb 100%);
+            border-radius: 20px;
+            padding: 40px 30px;
+            margin: 25px 0 40px;
+        }
+
+        .hero-content {
+            flex: 1 1 420px;
+            min-width: 0;
+        }
+
+        .hero-label {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #7c8aa5;
             margin-bottom: 15px;
-            color: var(--primary);
         }
 
-        .main-title p {
-            font-size: 1.1rem;
+        .hero-title {
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--iiit-blue);
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+
+        .hero-subtitle {
+            font-size: 1.4rem;
+            font-weight: 600;
             color: var(--accent-text);
-            max-width: 800px;
-            margin: 0 auto;
+            margin-bottom: 18px;
+        }
+
+        .hero-description {
+            font-size: 1rem;
+            color: #4a5568;
+            max-width: 520px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .hero-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .hero-feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--iiit-blue);
+        }
+
+        .hero-feature-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #dcf1ec;
+            color: var(--accent-text);
+            flex-shrink: 0;
+        }
+
+        .hero-image-wrap {
+            flex: 1 1 380px;
+            min-width: 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hero-drone-img {
+            width: 100%;
+            max-width: 480px;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .hero-image-overlay {
+            position: absolute;
+            top: 10%;
+            right: 0;
+            text-align: right;
+            color: var(--iiit-blue);
+            max-width: 160px;
+        }
+
+        .hero-overlay-caption {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1.4;
+        }
+
+        .hero-overlay-divider {
+            width: 40px;
+            height: 2px;
+            background: var(--accent-text);
+            margin: 10px 0 10px auto;
+        }
+
+        .hero-overlay-subcaption {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #4a5568;
+            line-height: 1.4;
         }
 
         .services-grid {
@@ -338,6 +479,44 @@
                 display: flex;
             }
 
+            .brand-subtitle {
+                display: none;
+            }
+
+            .brand-divider {
+                display: none;
+            }
+
+            .hero-section {
+                flex-direction: column;
+                padding: 30px 20px;
+            }
+
+            /* flex-basis applies to whichever axis is the main axis -- in
+               the row layout above it sizes width, but once the section
+               stacks to a column here it would size HEIGHT instead,
+               forcing a large minimum height and leaving a big empty gap.
+               auto lets both boxes size by their actual content instead. */
+            .hero-content,
+            .hero-image-wrap {
+                flex: 1 1 auto;
+            }
+
+            .hero-title {
+                font-size: 2.8rem;
+            }
+
+            .hero-image-overlay {
+                position: static;
+                text-align: left;
+                max-width: none;
+                margin-top: 15px;
+            }
+
+            .hero-overlay-divider {
+                margin: 10px 0;
+            }
+
             .nav-menu {
                 display: none;
                 position: absolute;
@@ -354,10 +533,6 @@
 
             .nav-menu.active {
                 display: flex;
-            }
-
-            .main-title h1 {
-                font-size: 2rem;
             }
 
             .services-grid {
@@ -402,20 +577,25 @@
         }
 
         @media (max-width: 480px) {
-            .logo-line-1 {
-                font-size: 0.8rem;
+            .brand-name {
+                font-size: 0.9rem;
             }
 
-            .logo-line-2 {
-                font-size: 1.2rem;
+            .brand-logo-img {
+                height: 40px;
+                width: 40px;
             }
 
-            .main-title h1 {
-                font-size: 1.6rem;
+            .hero-title {
+                font-size: 2.1rem;
             }
 
-            .main-title p {
-                font-size: 0.95rem;
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .hero-features {
+                gap: 12px;
             }
 
             .service-card {
@@ -449,49 +629,81 @@
         .status-disconnected {
             background-color: var(--danger);
         }
-        
-        .connection-status {
-            margin-top: 20px;
-            padding: 10px;
-            background: #ffffff;
-            border-radius: 8px;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <div class="logo">
-                <i class="fas fa-ambulance logo-icon"></i>
-                <div class="logo-text">
-                    <div class="logo-line-1">IIITDM Kurnool</div>
-                    <div class="logo-line-2">Ambulance Patrol Drone</div>
+        <header class="site-header">
+            <div class="header-brands">
+                <div class="brand-block">
+                    <img src="/assets/logos/iiitdm-logo.png" alt="IIITDM Kurnool logo" class="brand-logo-img">
+                    <div class="brand-text">
+                        <div class="brand-name">IIITDM KURNOOL</div>
+                        <div class="brand-subtitle">Indian Institute of Information Technology, Design and Manufacturing, Kurnool</div>
+                    </div>
+                </div>
+                <div class="brand-divider"></div>
+                <div class="brand-block">
+                    <img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo" class="brand-logo-img">
+                    <div class="brand-text">
+                        <div class="brand-name">Trigun Robotic Systems</div>
+                        <div class="brand-subtitle brand-subtitle-teal">Autonomous Solutions for a Safer Tomorrow</div>
+                    </div>
                 </div>
             </div>
-            
+
             <button class="nav-toggle" id="navToggle">
                 <i class="fas fa-bars"></i>
             </button>
-            
+
             <nav class="nav-menu" id="navMenu">
-                <a href="#" id="homeLink">Home</a>
-                <a href="#" id="registerLink">Register</a>
-                <a href="#" id="registeredUsersLink">Registered Drone and Doctors</a>
-                <a href="#" id="aboutLink">About</a>
+                <a href="#" id="homeLink"><i class="fas fa-home"></i> Home</a>
+                <a href="#" id="registerLink"><i class="fas fa-user"></i> Register</a>
+                <a href="#" id="registeredUsersLink"><i class="fas fa-users"></i> Registered Drone and Doctors</a>
+                <a href="#" id="aboutLink"><i class="fas fa-info-circle"></i> About</a>
             </nav>
-        </header>
 
-        <main>
-            <div class="main-title">
-                <h1>Emergency Medical Response System</h1>
-                <p>Revolutionizing emergency healthcare with drone technology to provide faster response times and real-time medical assistance</p>
-            </div>
-
-            <div class="connection-status" id="connectionStatus">
+            <div class="status-pill" id="connectionStatus">
                 <span class="status-indicator status-disconnected" id="statusIndicator"></span>
                 <span id="statusText">Not connected to server</span>
             </div>
+        </header>
+
+        <main>
+            <section class="hero-section">
+                <div class="hero-content">
+                    <div class="hero-label">RAPID RESPONSE&nbsp;&nbsp;|&nbsp;&nbsp;SMART TECHNOLOGY&nbsp;&nbsp;|&nbsp;&nbsp;SAVING LIVES</div>
+                    <h1 class="hero-title">DRUVA</h1>
+                    <p class="hero-subtitle">Drone for Rural and Urban Visual Aid</p>
+                    <p class="hero-description">Leveraging autonomous drone technology to provide faster response times and real-time medical assistance for a safer and healthier society.</p>
+                    <div class="hero-features">
+                        <div class="hero-feature-item">
+                            <span class="hero-feature-icon"><i class="fas fa-bolt"></i></span>
+                            <span>Faster Response</span>
+                        </div>
+                        <div class="hero-feature-item">
+                            <span class="hero-feature-icon"><i class="fas fa-heartbeat"></i></span>
+                            <span>Real-time Assistance</span>
+                        </div>
+                        <div class="hero-feature-item">
+                            <span class="hero-feature-icon"><i class="fas fa-users"></i></span>
+                            <span>Safer Communities</span>
+                        </div>
+                        <div class="hero-feature-item">
+                            <span class="hero-feature-icon"><i class="fas fa-leaf"></i></span>
+                            <span>Sustainable Healthcare</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-image-wrap">
+                    <img src="/assets/hero-drone.jpg" alt="Ambulance patrol drone" class="hero-drone-img">
+                    <div class="hero-image-overlay">
+                        <div class="hero-overlay-caption">Drones for Healthier Communities</div>
+                        <div class="hero-overlay-divider"></div>
+                        <div class="hero-overlay-subcaption">Technology in Service of Humanity</div>
+                    </div>
+                </div>
+            </section>
 
             <div class="services-grid">
                 <div class="service-card" id="droneSimulator">
