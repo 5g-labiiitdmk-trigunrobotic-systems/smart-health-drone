@@ -2590,7 +2590,7 @@
                 showTextChat: true,
                 showUserList: true,
                 maxUsers: 2,
-                layout: "Auto",
+                layout: "Grid",
                 showLayoutButton: false,
                 // ZegoUIKitPrebuilt doesn't expose a zp.on(...) event
                 // emitter -- room lifecycle events are wired up via these
@@ -2680,6 +2680,16 @@
                 }, timeoutMs);
             });
         }
+
+        // --- Text message from doctor, spoken aloud via the browser's ---
+        // --- built-in Speech Synthesis API (no server-side TTS needed). ---
+        socket.on('doctorMessage', (data) => {
+            if (!data || !data.text) return;
+            addLogEntry(`📩 Doctor: "${data.text}"`, 'alert');
+            if (window.speechSynthesis) {
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.text));
+            }
+        });
 
         socket.on('assignedDoctor', (connection) => {
             myRoomId = connection.roomId;
