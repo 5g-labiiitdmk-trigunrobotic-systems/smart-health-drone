@@ -564,6 +564,16 @@ io.on('connection', (socket) => {
         socket.to(data.roomId).emit('droneData', data);
     });
 
+    // --- Doctor -> drone text message (scoped to the pairing's own room) ---
+    // The drone side speaks this aloud via the browser's Speech Synthesis
+    // API, same room-isolation pattern as the GPS relay above.
+    socket.on('doctorMessage', (data) => {
+        if (!data || !data.roomId || !data.text) {
+            return;
+        }
+        socket.to(data.roomId).emit('doctorMessage', data);
+    });
+
     // --- Emergency call queue: a drone raises a request, an available ---
     // --- doctor accepts it, rather than doctors self-selecting a call. ---
     socket.on('requestEmergency', (data = {}) => {

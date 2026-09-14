@@ -402,6 +402,10 @@
             <div class="video-call-container">
                 <h3 id="video-call-title-text"><i class="fas fa-video"></i> Emergency Video Call</h3>
                 <div id="zego-video-container"></div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <input type="text" id="doctor-message-input" placeholder="Type a message for the drone to hear..." style="flex:1; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
+                    <button id="doctor-message-send" style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
+                </div>
             </div>
         </section>
     </div>
@@ -581,6 +585,21 @@
             });
         }
 
+        // --- Text message to drone (spoken aloud there via TTS) ---
+        const doctorMessageInput = document.getElementById('doctor-message-input');
+        const doctorMessageSend = document.getElementById('doctor-message-send');
+        function sendDoctorMessage() {
+            const text = doctorMessageInput.value.trim();
+            if (!text) return;
+            socket.emit('doctorMessage', { roomId: myRoomId, text });
+            addLogEntry(`Message sent to drone: "${text}"`, 'info');
+            doctorMessageInput.value = '';
+        }
+        doctorMessageSend.addEventListener('click', sendDoctorMessage);
+        doctorMessageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendDoctorMessage();
+        });
+
         socket.on('droneData', (data) => {
             let ambulanceCoords = KURNOOL_COORDS;
             let droneCoords = KURNOOL_COORDS;
@@ -691,7 +710,7 @@
                 showTextChat: true,
                 showUserList: true,
                 maxUsers: 2,
-                layout: "Auto",
+                layout: "Grid",
                 showLayoutButton: false,
                 // ZegoUIKitPrebuilt doesn't expose a zp.on(...) event
                 // emitter -- room lifecycle events are wired up via these
