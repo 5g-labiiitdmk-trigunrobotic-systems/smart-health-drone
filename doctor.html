@@ -169,8 +169,11 @@
             position: absolute;
             bottom: 8px;
             right: 8px;
-            width: 30%;
-            max-width: 160px;
+            width: 28%;
+            max-width: 150px;
+            min-width: 80px;
+            aspect-ratio: 4 / 3;
+            height: auto;
             border-radius: 6px;
             border: 2px solid #fff;
             object-fit: cover;
@@ -419,9 +422,11 @@
 
         <section class="video-section">
             <div class="video-call-container">
-                <h3 id="video-call-title-text">
-                    <i class="fas fa-video"></i> Emergency Video Call
-                    <button id="end-call-btn" style="margin-left:auto; padding:2px 10px; border:none; border-radius:6px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.8rem;">End</button>
+                <h3 style="justify-content: space-between;">
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-video"></i> <span id="video-call-title-text">Emergency Video Call</span>
+                    </span>
+                    <button id="end-call-btn" style="padding:2px 10px; border:none; border-radius:6px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.8rem;">End</button>
                 </h3>
                 <div id="video-call-frame">
                     <video id="remote-video" autoplay playsinline></video>
