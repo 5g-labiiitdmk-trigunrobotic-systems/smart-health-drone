@@ -18,22 +18,26 @@
             --primary: #e63946;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --light: #f1faee;
-            --dark: #0d1b2a;
+            --accent-text: #1f7a80;
+            --light: #1a1a1a;
+            --dark: #f5f7fa;
             --success: #2a9d8f;
             --warning: #e9c46a;
+            --warning-text: #8a6d1a;
             --danger: #e76f51;
             --road: #4a4e69;
             --lane: #9a8c98;
             --hospital: #8ecae6;
+            --hospital-text: #2b6ca3;
             --building: #6d6875;
-            --map-overlay: rgba(13, 27, 42, 0.85);
+            --map-overlay: #f0f2f5;
             --iiit-blue: #1a3a5f;
             --iiit-gold: #d4af37;
+            --iiit-gold-text: #8a6d1a;
         }
         
         body {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: #f5f7fa;
             color: var(--light);
             min-height: 100vh;
             overflow: hidden;
@@ -63,13 +67,12 @@
         /* Header Styles */
         header {
             grid-area: header;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             border-radius: 15px;
             display: flex;
             align-items: center;
             padding: 12px 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             position: relative;
             z-index: 10;
         }
@@ -88,8 +91,6 @@
             width: 100%;
             height: 100%;
             border-radius: inherit;
-            background: radial-gradient(circle at 10% 20%, rgba(230, 57, 70, 0.2) 0%, transparent 40%),
-                        radial-gradient(circle at 90% 80%, rgba(168, 218, 220, 0.2) 0%, transparent 40%);
             pointer-events: none;
         }
         
@@ -114,7 +115,7 @@
         .logo-line-1 {
             font-size: 1.5rem;
             font-weight: 600;
-            color: var(--iiit-gold);
+            color: var(--iiit-gold-text);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -122,16 +123,13 @@
         .logo-line-2 {
             font-size: 1.5rem;
             font-weight: 700;
-            background: linear-gradient(to right, var(--accent), var(--primary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            color: var(--primary);
             margin: 3px 0;
         }
         
         .logo-line-3 {
             font-size: 0.9rem;
-            color: var(--accent);
+            color: var(--accent-text);
             font-weight: 500;
             letter-spacing: 0.5px;
         }
@@ -143,7 +141,7 @@
         }
         
         .simulation-time {
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             padding: 8px 15px;
             border-radius: 20px;
             font-weight: 600;
@@ -154,20 +152,19 @@
         }
         
         .time-icon {
-            color: var(--accent);
+            color: var(--accent-text);
         }
         
         /* Sidebar Styles */
         .sidebar {
             grid-area: sidebar;
-            background: var(--map-overlay);
+            background: #f5f7fa;
             border-radius: 15px;
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             z-index: 10;
             /* Without min-height:0, a grid item's default min-height:auto
                is its content's full height, so whenever Simulation
@@ -185,7 +182,8 @@
         }
         
         .control-panel {
-            background: rgba(29, 53, 87, 0.6);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             padding: 15px;
         }
@@ -195,7 +193,7 @@
             align-items: center;
             gap: 10px;
             margin-bottom: 15px;
-            color: var(--accent);
+            color: var(--accent-text);
             font-size: 1.2rem;
             font-weight: 600;
         }
@@ -226,7 +224,7 @@
             -webkit-appearance: none;
             height: 8px;
             border-radius: 4px;
-            background: var(--dark);
+            background: #e0e0e0;
             outline: none;
         }
         
@@ -237,7 +235,6 @@
             border-radius: 50%;
             background: var(--accent);
             cursor: pointer;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
         }
         
         .value-display {
@@ -286,7 +283,7 @@
         
         .btn-warning {
             background: var(--warning);
-            color: var(--dark);
+            color: #1a1a1a;
         }
         
         .btn-danger {
@@ -296,7 +293,6 @@
         
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
         
         .btn:active {
@@ -314,7 +310,8 @@
             flex-wrap: wrap;
             justify-content: space-between;
             padding: 10px;
-            background: rgba(29, 53, 87, 0.6);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
             border-left: 4px solid var(--accent);
             /* Label + value ("Traffic Conditions" + "Heavy Congestion")
@@ -341,7 +338,7 @@
         }
         
         .status-warning {
-            color: var(--warning);
+            color: var(--warning-text);
         }
         
         .status-critical {
@@ -356,8 +353,7 @@
             border-radius: 15px;
             overflow: hidden;
             position: relative;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
         }
         
         #map {
@@ -375,7 +371,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(13, 27, 42, 0.3);
+            background: #f0f2f5;
             z-index: 2;
             pointer-events: none;
         }
@@ -391,8 +387,8 @@
         }
         
         .map-btn {
-            background: rgba(29, 53, 87, 0.85);
-            color: var(--accent);
+            background: #ffffff;
+            color: var(--accent-text);
             border: 1px solid var(--accent);
             border-radius: 8px;
             padding: 10px 15px;
@@ -406,7 +402,7 @@
         }
         
         .map-btn:hover {
-            background: rgba(168, 218, 220, 0.3);
+            background: #e0e0e0;
         }
         
         /* Video call container - Updated for movable/resizable and responsive */
@@ -423,7 +419,6 @@
             border: 2px solid var(--accent);
             border-radius: 12px;
             z-index: 9999;
-            box-shadow: 0 0 15px rgba(0,0,0,0.6);
             overflow: hidden; /* Changed to hidden for default, visible during resize */
             color: white;
             font-family: Arial, sans-serif;
@@ -452,7 +447,7 @@
             gap: 6px;
             font-size: 0.9rem;
             font-weight: 600;
-            color: var(--accent);
+            color: var(--accent-text);
         }
         
         .video-call-status {
@@ -502,14 +497,13 @@
             top: 20px;
             left: 20px;
             z-index: 100;
-            background: rgba(29, 53, 87, 0.7);
+            background: #ffffff;
             padding: 10px 15px;
             border-radius: 30px;
             display: flex;
             align-items: center;
             gap: 10px;
             border: 1px solid var(--accent);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             color: var(--light);
         }
         
@@ -518,7 +512,7 @@
         }
         
         .gps-indicator .gps-icon {
-            color: var(--warning);
+            color: var(--warning-text);
         }
         
         .gps-indicator.active .gps-icon {
@@ -528,9 +522,9 @@
         
         /* Animations */
         @keyframes siren {
-            0% { background: blue; box-shadow: 0 0 10px blue; }
-            50% { background: red; box-shadow: 0 0 10px red; }
-            100% { background: blue; box-shadow: 0 0 10px blue; }
+            0% { background: blue; }
+            50% { background: red; }
+            100% { background: blue; }
         }
         
         @keyframes pulse {
@@ -556,7 +550,6 @@
             align-items: center;
             color: white;
             font-size: 20px;
-            box-shadow: 0 0 15px rgba(230, 57, 70, 0.7);
             position: relative;
             overflow: hidden;
             border: 2px solid white;
@@ -572,7 +565,6 @@
             background: blue;
             border-radius: 50%;
             animation: siren 1s infinite;
-            box-shadow: 0 0 5px blue;
         }
         
         .hospital-marker {
@@ -585,7 +577,6 @@
             align-items: center;
             color: white;
             font-size: 24px;
-            box-shadow: 0 0 15px rgba(142, 202, 230, 0.7);
             border: 2px solid white;
             z-index: 1000;
         }
@@ -599,7 +590,6 @@
             justify-content: center;
             align-items: center;
             color: white;
-            box-shadow: 0 0 10px rgba(168, 218, 220, 0.8);
             border: 2px solid white;
             z-index: 1001;
             
@@ -628,7 +618,7 @@
             position: absolute;
             bottom: 240px;
             right: 20px;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             padding: 15px;
             border-radius: 10px;
             z-index: 1000;
@@ -640,7 +630,7 @@
         .legend-title {
             font-weight: bold;
             margin-bottom: 10px;
-            color: var(--accent);
+            color: var(--accent-text);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -678,7 +668,6 @@
             align-items: center;
             z-index: 1002;
             pointer-events: none;
-            box-shadow: 0 0 15px rgba(168, 218, 220, 0.7);
         }
         
         .drone-guidance i {
@@ -691,7 +680,7 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             padding: 15px;
             border-radius: 10px;
             z-index: 1000;
@@ -704,7 +693,7 @@
         .developer-title {
             font-weight: bold;
             margin-bottom: 8px;
-            color: var(--accent);
+            color: var(--accent-text);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -722,17 +711,15 @@
             right: 20px;
             z-index: 1000;
             font-size: 2.5rem;
-            color: var(--iiit-gold);
-            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            color: var(--iiit-gold-text);
         }
         
         /* Routing control styling */
         .leaflet-routing-container {
-            background: rgba(29, 53, 87, 0.9);
+            background: #ffffff;
             color: var(--light);
             border: 1px solid var(--accent);
             border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             padding: 10px;
             max-width: 300px;
         }
@@ -744,7 +731,7 @@
         
         .leaflet-routing-alt h3 {
             font-size: 1rem;
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 5px;
         }
         
@@ -758,7 +745,7 @@
         }
         
         .leaflet-routing-geocoders input {
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             color: var(--light);
             border: 1px solid var(--accent);
             border-radius: 4px;
@@ -779,11 +766,10 @@
         
         .console {
             grid-area: console;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             border-radius: 15px;
             padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             display: flex;
             flex-direction: column;
             /* console-header and .system-overview (the 3 metric cards) are
@@ -802,7 +788,7 @@
             justify-content: space-between;
             align-items: center;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            border-bottom: 1px solid #e0e0e0;
             margin-bottom: 10px;
         }
         
@@ -811,7 +797,7 @@
             align-items: center;
             gap: 10px;
             font-weight: 600;
-            color: var(--accent);
+            color: var(--accent-text);
         }
         
         .console-controls button {
@@ -830,7 +816,7 @@
         .console-content {
             flex: 1;
             min-height: 0; /* let flex:1 actually shrink instead of forcing its parent to grow to fit content */
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             border-radius: 8px;
             padding: 10px;
             overflow-y: auto;
@@ -848,7 +834,7 @@
         }
 
         .log-timestamp {
-            color: var(--accent);
+            color: var(--accent-text);
             font-weight: 600;
             flex-shrink: 0;
         }
@@ -896,16 +882,16 @@
                .system-overview's flex-wrap, a card that doesn't fit
                drops to its own row instead of overflowing sideways. */
             min-width: 90px;
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             border-radius: 10px;
             padding: 15px;
             text-align: center;
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
         }
         
         .metric-card i {
             font-size: 1.5rem;
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 10px;
         }
         
@@ -918,7 +904,7 @@
         
         .metric-label {
             font-size: 0.9rem;
-            color: var(--accent);
+            color: var(--accent-text);
         }
         
         /* Hospital info panel */
@@ -926,7 +912,7 @@
             position: absolute;
             top: 120px;
             right: 20px;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             padding: 15px;
             border-radius: 10px;
             z-index: 1000;
@@ -940,7 +926,7 @@
         .hospital-title {
             font-weight: bold;
             margin-bottom: 10px;
-            color: var(--accent);
+            color: var(--accent-text);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -1193,6 +1179,34 @@
 </div>
 </header>
 <aside class="sidebar">
+<div class="control-panel" id="drone-mode-panel">
+<div class="panel-title">
+<i class="fas fa-satellite-dish panel-icon"></i>
+<span>DRONE MODE</span>
+</div>
+<div class="control-group">
+<label class="control-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+<input type="radio" name="drone-mode" id="drone-mode-simulation" checked/> Simulation Mode
+</label>
+<label class="control-label" style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:6px;">
+<input type="radio" name="drone-mode" id="drone-mode-real"/> Real Drone Mode
+</label>
+</div>
+<div id="real-drone-id-group" class="control-group" style="display:none;">
+<label class="control-label">Drone ID</label>
+<input type="text" id="real-drone-id-input" class="form-input" placeholder="e.g. drone-operator username" style="width:100%; padding:6px; border:1px solid #e0e0e0; border-radius:4px;"/>
+</div>
+<div id="real-drone-status" style="display:none; margin-top:10px; font-size:0.85rem;">
+<div style="display:flex; align-items:center; gap:8px;">
+<span id="real-drone-live-badge" style="background:#2a9d8f; color:#fff; padding:2px 8px; border-radius:4px; font-weight:600;">LIVE</span>
+<span id="real-drone-nosignal-badge" style="display:none; background:#e63946; color:#fff; padding:2px 8px; border-radius:4px; font-weight:600;">NO SIGNAL</span>
+</div>
+<div style="margin-top:6px;">Last updated: <span id="real-drone-last-updated">-</span></div>
+<div>Altitude: <span id="real-drone-altitude">-</span> m</div>
+<div>Speed: <span id="real-drone-speed">-</span> km/h</div>
+<div>Battery: <span id="real-drone-battery">-</span>%</div>
+</div>
+</div>
 <div class="control-panel">
 <div class="panel-title">
 <i class="fas fa-sliders-h panel-icon"></i>
@@ -1232,7 +1246,7 @@
 <i class="fas fa-robot"></i> Enable Autonomous Mode
 </button>
 </div>
-<div id="autonomous-status" style="display:none; margin-top: 10px; font-size: 0.85rem; color: var(--accent);">
+<div id="autonomous-status" style="display:none; margin-top: 10px; font-size: 0.85rem; color: var(--accent-text);">
     <div>ETA: <span id="autonomous-eta">-</span> min</div>
     <div>Distance remaining: <span id="autonomous-distance-remaining">-</span> km</div>
 </div>
@@ -1368,25 +1382,24 @@
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(13,27,42,0.85);
+    background: #f0f2f5;
     z-index: 3000;
     align-items: center;
     justify-content: center;
 ">
     <div style="
-        background: rgba(29,53,87,0.97);
+        background: #ffffff;
         border: 2px solid #a8dadc;
         border-radius: 15px;
         padding: 30px;
         max-width: 420px;
         width: 90%;
-        color: white;
+        color: #1a1a1a;
         text-align: center;
-        box-shadow: 0 0 30px rgba(0,0,0,0.6);
     ">
         <i class="fas fa-map-marker-alt" style="font-size: 2.5rem; color: #e63946; margin-bottom: 15px;"></i>
         <h3 style="margin-bottom: 12px;">Location Access Needed</h3>
-        <p style="color: #a8dadc; line-height: 1.5; margin-bottom: 20px;">
+        <p style="color: #1f7a80; line-height: 1.5; margin-bottom: 20px;">
             This drone simulation needs your current location to place the ambulance marker,
             find the nearest hospital, and calculate a live road route. Your browser will now
             ask for permission — click "Allow" on that prompt to continue.
@@ -1405,33 +1418,32 @@
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(13,27,42,0.85);
+    background: #f0f2f5;
     z-index: 3000;
     align-items: center;
     justify-content: center;
 ">
     <div style="
-        background: rgba(29,53,87,0.97);
+        background: #ffffff;
         border: 2px solid #a8dadc;
         border-radius: 15px;
         padding: 30px;
         max-width: 380px;
         width: 90%;
-        color: white;
-        box-shadow: 0 0 30px rgba(0,0,0,0.6);
+        color: #1a1a1a;
     ">
         <h3 style="margin-bottom: 15px; text-align: center;">Enter Starting Location</h3>
         <form id="manual-location-form">
             <div style="margin-bottom: 15px;">
                 <label style="display:block; margin-bottom: 5px;">Latitude</label>
                 <input type="number" step="any" id="manual-lat" required
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: rgba(13,27,42,0.7); color: white;"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: #ffffff; color: #1a1a1a;"
                     value="15.8281">
             </div>
             <div style="margin-bottom: 20px;">
                 <label style="display:block; margin-bottom: 5px;">Longitude</label>
                 <input type="number" step="any" id="manual-lng" required
-                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: rgba(13,27,42,0.7); color: white;"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #a8dadc; background: #ffffff; color: #1a1a1a;"
                     value="78.0373">
             </div>
             <div style="display:flex; gap:10px; justify-content: center;">
@@ -1455,15 +1467,14 @@
     top: 160px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(29,53,87,0.95);
-    color: white;
+    background: #ffffff;
+    color: #1a1a1a;
     padding: 20px;
     border-radius: 15px;
     border: 2px solid #a8dadc;
     z-index: 2000;
     width: 90%;
     max-width: 400px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
     text-align: center;
     display: none; /* Hidden by default */
 ">
@@ -1581,6 +1592,122 @@
             joinMyRoom();
         }
         socket.on('connect', joinMyRoom);
+
+        // --- Real Drone Mode: hardware telemetry ingestion ---
+        // Toggles between the existing simulated flight and live hardware
+        // telemetry received via the server's /api/drone-telemetry endpoint
+        // (see hardware-adapters/) and relayed over socket.io into a
+        // droneId-scoped room. Additive: simulation code paths are untouched.
+        let realDroneModeActive = false;
+        let lastRealTelemetry = null;
+        let lastRealTelemetryAt = 0;
+        let realDroneNoSignalInterval = null;
+        const REAL_DRONE_NO_SIGNAL_MS = 10000;
+
+        function getRealDroneId() {
+            const explicit = document.getElementById('real-drone-id-input').value.trim();
+            if (explicit) return explicit;
+            if (currentConnection && currentConnection.operatorName) return currentConnection.operatorName;
+            return droneOperatorName || 'unknown-drone';
+        }
+
+        function joinRealDroneRoom() {
+            const droneId = getRealDroneId();
+            socket.emit('join', 'drone-telemetry-' + droneId);
+        }
+
+        document.getElementById('drone-mode-real').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('real-drone-id-group').style.display = 'block';
+                document.getElementById('real-drone-status').style.display = 'block';
+                realDroneModeActive = true;
+                // Stop any running simulation so real and simulated motion
+                // never fight over the same markers.
+                if (ambulanceInterval) clearInterval(ambulanceInterval);
+                if (typeof stopAutonomousMode === 'function') stopAutonomousMode();
+                isSimulationActive = false;
+                joinRealDroneRoom();
+                if (realDroneNoSignalInterval) clearInterval(realDroneNoSignalInterval);
+                realDroneNoSignalInterval = setInterval(updateRealDroneFreshnessUI, 1000);
+                addLogEntry('Real Drone Mode enabled: listening for live telemetry on drone-telemetry-' + getRealDroneId(), 'info');
+            }
+        });
+
+        document.getElementById('drone-mode-simulation').addEventListener('change', function() {
+            if (this.checked) {
+                realDroneModeActive = false;
+                document.getElementById('real-drone-id-group').style.display = 'none';
+                document.getElementById('real-drone-status').style.display = 'none';
+                if (realDroneNoSignalInterval) {
+                    clearInterval(realDroneNoSignalInterval);
+                    realDroneNoSignalInterval = null;
+                }
+                addLogEntry('Switched back to Simulation Mode.', 'info');
+            }
+        });
+
+        document.getElementById('real-drone-id-input').addEventListener('change', function() {
+            if (realDroneModeActive) joinRealDroneRoom();
+        });
+
+        function updateRealDroneFreshnessUI() {
+            const badge = document.getElementById('real-drone-live-badge');
+            const noSignalBadge = document.getElementById('real-drone-nosignal-badge');
+            const lastUpdatedEl = document.getElementById('real-drone-last-updated');
+            if (!lastRealTelemetryAt) {
+                lastUpdatedEl.textContent = 'never';
+                badge.style.display = 'none';
+                noSignalBadge.style.display = 'inline-block';
+                return;
+            }
+            const ageSec = Math.round((Date.now() - lastRealTelemetryAt) / 1000);
+            lastUpdatedEl.textContent = ageSec + 's ago';
+            if (ageSec > REAL_DRONE_NO_SIGNAL_MS / 1000) {
+                badge.style.display = 'none';
+                noSignalBadge.style.display = 'inline-block';
+                if (droneMarker) droneMarker.setOpacity && droneMarker.setOpacity(0.4);
+            } else {
+                badge.style.display = 'inline-block';
+                noSignalBadge.style.display = 'none';
+                if (droneMarker) droneMarker.setOpacity && droneMarker.setOpacity(1);
+            }
+        }
+
+        socket.on('real-drone-position', function(data) {
+            if (!realDroneModeActive || !data) return;
+            lastRealTelemetry = data;
+            lastRealTelemetryAt = Date.now();
+            updateRealDroneFreshnessUI();
+
+            document.getElementById('real-drone-altitude').textContent =
+                typeof data.altitude === 'number' ? data.altitude.toFixed(1) : '-';
+            document.getElementById('real-drone-speed').textContent =
+                typeof data.speed === 'number' ? data.speed.toFixed(1) : '-';
+            document.getElementById('real-drone-battery').textContent =
+                typeof data.battery === 'number' ? data.battery.toFixed(0) : '-';
+
+            // Update the drone marker position/heading on the map, creating
+            // it lazily if the operator went straight to Real Drone Mode
+            // without running a simulation first.
+            if (!droneMarker) {
+                droneMarker = L.marker([data.lat, data.lng]).addTo(map);
+            } else {
+                if (!map.hasLayer(droneMarker)) droneMarker.addTo(map);
+                droneMarker.setLatLng([data.lat, data.lng]);
+            }
+            if (typeof data.heading === 'number' && droneMarker.setRotationAngle) {
+                droneMarker.setRotationAngle(data.heading);
+            }
+
+            // Relay into the existing pairing pipeline in the same shape the
+            // simulation emits, so doctor.html needs no new socket handling.
+            socket.emit('updateDroneData', {
+                roomId: myRoomId,
+                drone: { lat: data.lat, lng: data.lng, heading: data.heading, altitude: data.altitude, speed: data.speed, battery: data.battery },
+                ambulance: ambulanceMarker ? ambulanceMarker.getLatLng() : { lat: data.lat, lng: data.lng },
+                source: 'real'
+            });
+        });
 
         if (currentConnection && currentConnection.role === 'droneOperator') {
             droneOperatorName = currentConnection.operatorName;
@@ -1771,7 +1898,8 @@
             socket.emit('updateDroneData', {
                 roomId: myRoomId,
                 ambulance: { lat: lat, lng: lng },
-                drone: { lat: lat, lng: lng } // Drone starts at ambulance location
+                drone: { lat: lat, lng: lng }, // Drone starts at ambulance location
+                source: 'simulated'
             });
         }
 
@@ -1847,7 +1975,7 @@
                     const marker = L.marker([h.lat, h.lng], {
                         icon: L.divIcon({
                             className: 'custom-icon',
-                            html: '<i class="fas fa-hospital" style="font-size: 20px; color: var(--hospital);"></i>',
+                            html: '<i class="fas fa-hospital" style="font-size: 20px; color: var(--hospital-text);"></i>',
                             iconSize: [24, 24]
                         })
                     }).addTo(map);
@@ -2170,7 +2298,8 @@
                 socket.emit('updateDroneData', {
                     roomId: myRoomId,
                     ambulance: ambulanceMarker.getLatLng(),
-                    drone: droneMarker.getLatLng()
+                    drone: droneMarker.getLatLng(),
+                    source: 'simulated'
                 });
                 
                 if (progress < 1) {

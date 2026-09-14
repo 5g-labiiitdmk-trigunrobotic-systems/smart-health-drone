@@ -10,13 +10,16 @@
             --primary: #e63946;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --light: #f1faee;
-            --dark: #0d1b2a;
+            --accent-text: #1f7a80;
+            --light: #1a1a1a;
+            --dark: #f5f7fa;
             --success: #2a9d8f;
             --warning: #e9c46a;
+            --warning-text: #8a6d1a;
             --danger: #e76f51;
             --iiit-blue: #1a3a5f;
             --iiit-gold: #d4af37;
+            --iiit-gold-text: #8a6d1a;
         }
 
         * {
@@ -27,7 +30,7 @@
         }
 
         body {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: #f5f7fa;
             color: var(--light);
             min-height: 100vh;
         }
@@ -45,7 +48,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px 0;
-            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            border-bottom: 1px solid #e0e0e0;
             margin-bottom: 30px;
         }
 
@@ -70,7 +73,7 @@
         .logo-line-1 {
             font-size: 1rem;
             font-weight: 600;
-            color: var(--iiit-gold);
+            color: var(--iiit-gold-text);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -78,10 +81,7 @@
         .logo-line-2 {
             font-size: 1.5rem;
             font-weight: 700;
-            background: linear-gradient(to right, var(--accent), var(--primary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            color: var(--primary);
             margin: 3px 0;
         }
 
@@ -130,14 +130,12 @@
         .main-title h1 {
             font-size: 2.5rem;
             margin-bottom: 15px;
-            background: linear-gradient(to right, var(--accent), var(--primary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--primary);
         }
 
         .main-title p {
             font-size: 1.1rem;
-            color: var(--accent);
+            color: var(--accent-text);
             max-width: 800px;
             margin: 0 auto;
         }
@@ -150,25 +148,23 @@
         }
 
         .service-card {
-            background: rgba(29, 53, 87, 0.7);
+            background: #ffffff;
             border-radius: 15px;
             padding: 30px;
             text-align: center;
             transition: all 0.3s ease;
-            border: 1px solid rgba(168, 218, 220, 0.3);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            border: 1px solid #e0e0e0;
             cursor: pointer;
         }
 
         .service-card:hover {
             transform: translateY(-10px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
         }
 
         .service-icon {
             font-size: 3.5rem;
             margin-bottom: 20px;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .service-card h2 {
@@ -178,7 +174,7 @@
         }
 
         .service-card p {
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 20px;
         }
 
@@ -198,7 +194,6 @@
         .btn:hover {
             background: #f0545e;
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
         /* Modal Styles */
@@ -209,19 +204,18 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(13, 27, 42, 0.9);
+            background: #f0f2f5;
             z-index: 1000;
             overflow-y: auto;
         }
 
         .modal-content {
-            background: rgba(29, 53, 87, 0.95);
+            background: #ffffff;
             margin: 5% auto;
             padding: 30px;
             border-radius: 15px;
             max-width: 800px;
             width: 90%;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
             border: 1px solid var(--accent);
             position: relative;
         }
@@ -231,7 +225,7 @@
             top: 15px;
             right: 15px;
             font-size: 1.5rem;
-            color: var(--accent);
+            color: var(--accent-text);
             cursor: pointer;
         }
 
@@ -272,7 +266,7 @@
         .auth-form h2 {
             text-align: center;
             margin-bottom: 25px;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .form-group {
@@ -288,7 +282,7 @@
         .form-group input, .form-group select {
             width: 100%;
             padding: 12px 15px;
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             border: 1px solid var(--accent);
             border-radius: 8px;
             color: var(--light);
@@ -310,7 +304,7 @@
         .form-switch {
             text-align: center;
             margin-top: 20px;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .form-switch a {
@@ -323,8 +317,8 @@
             text-align: center;
             padding: 30px 0;
             margin-top: 50px;
-            border-top: 1px solid rgba(168, 218, 220, 0.3);
-            color: var(--accent);
+            border-top: 1px solid #e0e0e0;
+            color: var(--accent-text);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -349,13 +343,12 @@
                 position: absolute;
                 top: 80px;
                 right: 20px;
-                background: rgba(29, 53, 87, 0.95);
+                background: #ffffff;
                 flex-direction: column;
                 width: 200px;
                 border-radius: 10px;
                 padding: 15px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-                border: 1px solid rgba(168, 218, 220, 0.3);
+                border: 1px solid #e0e0e0;
                 z-index: 100;
             }
 
@@ -460,7 +453,7 @@
         .connection-status {
             margin-top: 20px;
             padding: 10px;
-            background: rgba(29, 53, 87, 0.7);
+            background: #ffffff;
             border-radius: 8px;
             text-align: center;
         }
@@ -521,7 +514,7 @@
             <p>&copy; 2025 IIITDM Kurnool - Ambulance Patrol Drone. All rights reserved.</p>
             <p>Developed by Dr. K. Krishna Naik, Dr. M. Ravi Kumar and G. Kashifa Anjum</p>
             <button class="btn" id="resetConnectionBtn" style="margin-top: 15px;">Reset Connection</button>
-            <a href="/admin.html" style="color: var(--accent); font-size: 0.85rem; margin-top: 10px;">Admin Panel</a>
+            <a href="/admin.html" style="color: var(--accent-text); font-size: 0.85rem; margin-top: 10px;">Admin Panel</a>
         </footer>
     </div>
     <!-- Registration Modal -->
@@ -664,7 +657,7 @@
             <div class="auth-form">
                 <h2><i class="fas fa-users"></i> Registered Drones and Doctors</h2>
                 <div id="registeredUsersList" style="text-align: left; max-height: 400px; overflow-y: auto;">
-                    <p style="color: var(--accent); text-align: center;">Loading...</p>
+                    <p style="color: var(--accent-text); text-align: center;">Loading...</p>
                 </div>
             </div>
         </div>
@@ -738,7 +731,7 @@
         <div class="modal-content">
             <span class="close-modal" id="closeAbout">&times;</span>
             <div style="padding: 20px;">
-                <h2 style="text-align: center; margin-bottom: 25px; color: var(--accent);">
+                <h2 style="text-align: center; margin-bottom: 25px; color: var(--accent-text);">
                     <i class="fas fa-info-circle"></i> About Ambulance Drone System
                 </h2>
                 <p style="color: var(--light); margin-bottom: 20px; line-height: 1.6;">
@@ -746,7 +739,7 @@
                     Our system combines drone technology with real-time video streaming to provide faster emergency response and enable remote 
                     medical professionals to assess situations before the ambulance arrives.
                 </p>
-                <h3 style="color: var(--accent); margin: 25px 0 15px;">Key Features:</h3>
+                <h3 style="color: var(--accent-text); margin: 25px 0 15px;">Key Features:</h3>
                 <ul style="color: var(--light); margin-bottom: 25px; padding-left: 20px; line-height: 1.6;">
                     <li>Real-time traffic navigation using advanced routing algorithms</li>
                     <li>Live video feed to medical professionals for remote assessment</li>
@@ -754,7 +747,7 @@
                     <li>Automated traffic clearance alerts</li>
                     <li>Integrated emergency call system</li>
                 </ul>
-                <h3 style="color: var(--accent); margin: 25px 0 15px;">Development Team:</h3>
+                <h3 style="color: var(--accent-text); margin: 25px 0 15px;">Development Team:</h3>
                 <div class="team-members-container">
                     <div class="team-member">
                          <img src=https://github.com/shifa2004/drone/blob/main/dr.k.krishna%20naik.png?raw=true alt="Dr. K. Krishna Naik">
@@ -997,12 +990,12 @@
         // Fetch registered users from the server and render them as a list
         async function loadRegisteredUsersList() {
             const listEl = document.getElementById('registeredUsersList');
-            listEl.innerHTML = '<p style="color: var(--accent); text-align: center;">Loading...</p>';
+            listEl.innerHTML = '<p style="color: var(--accent-text); text-align: center;">Loading...</p>';
             try {
                 const res = await fetch('/api/users');
                 const { users } = await res.json();
                 if (!users || users.length === 0) {
-                    listEl.innerHTML = '<p style="color: var(--accent); text-align: center;">No registered users yet.</p>';
+                    listEl.innerHTML = '<p style="color: var(--accent-text); text-align: center;">No registered users yet.</p>';
                     return;
                 }
                 const doctors = users.filter(u => u.userType === 'doctor');
@@ -1012,9 +1005,9 @@
                     if (group.length === 0) return '';
                     const items = group.map(u => `<li style="margin-bottom: 10px;">
                         <strong>${u.name}</strong> (${u.userId})<br>
-                        <span style="color: var(--accent); font-size: 0.9rem;">${detailFn(u)}</span>
+                        <span style="color: var(--accent-text); font-size: 0.9rem;">${detailFn(u)}</span>
                     </li>`).join('');
-                    return `<h3 style="color: var(--accent); margin: 15px 0 10px;">${title}</h3><ul style="padding-left: 20px;">${items}</ul>`;
+                    return `<h3 style="color: var(--accent-text); margin: 15px 0 10px;">${title}</h3><ul style="padding-left: 20px;">${items}</ul>`;
                 };
 
                 listEl.innerHTML =

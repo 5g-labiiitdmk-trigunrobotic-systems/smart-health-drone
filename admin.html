@@ -10,10 +10,12 @@
             --primary: #e63946;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --light: #f1faee;
-            --dark: #0d1b2a;
+            --accent-text: #1f7a80;
+            --light: #1a1a1a;
+            --dark: #f5f7fa;
             --success: #2a9d8f;
             --warning: #e9c46a;
+            --warning-text: #8a6d1a;
             --danger: #e76f51;
         }
 
@@ -25,7 +27,7 @@
         }
 
         body {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: #f5f7fa;
             color: var(--light);
             min-height: 100vh;
         }
@@ -41,7 +43,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px 0;
-            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            border-bottom: 1px solid #e0e0e0;
             margin-bottom: 30px;
         }
 
@@ -50,7 +52,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .btn {
@@ -70,21 +72,21 @@
         .btn-outline {
             background: transparent;
             border: 1px solid var(--accent);
-            color: var(--accent);
+            color: var(--accent-text);
         }
         .btn-danger { background: var(--danger); }
         .btn-danger:hover { background: #ff8563; }
 
         .card {
-            background: rgba(29, 53, 87, 0.7);
+            background: #ffffff;
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 25px;
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
         }
 
         .card h2 {
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 15px;
             font-size: 1.2rem;
         }
@@ -101,7 +103,7 @@
             font-size: 0.9rem;
         }
 
-        th { color: var(--accent); }
+        th { color: var(--accent-text); }
 
         .badge {
             display: inline-block;
@@ -114,12 +116,12 @@
         .badge-online { background: var(--success); color: white; }
         .badge-offline { background: #555; color: #ccc; }
         .badge-paired { background: var(--warning); color: #333; }
-        .badge-free { background: rgba(168, 218, 220, 0.3); color: var(--light); }
+        .badge-free { background: #e0e0e0; color: var(--light); }
 
         .auth-form {
             max-width: 400px;
             margin: 80px auto;
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             padding: 30px;
             border-radius: 15px;
             border: 1px solid var(--accent);
@@ -128,7 +130,7 @@
         .auth-form h2 {
             text-align: center;
             margin-bottom: 20px;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .form-group { margin-bottom: 18px; }
@@ -136,7 +138,7 @@
         .form-group input {
             width: 100%;
             padding: 10px 12px;
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             border: 1px solid var(--accent);
             border-radius: 8px;
             color: var(--light);
@@ -144,7 +146,7 @@
         }
 
         .error-text { color: var(--danger); margin-top: 10px; text-align: center; }
-        .empty-note { color: var(--accent); opacity: 0.8; padding: 10px 0; }
+        .empty-note { color: var(--accent-text); opacity: 0.8; padding: 10px 0; }
         [hidden] { display: none !important; }
 
         /* Tables can have more columns than a phone screen is wide. Below
@@ -174,8 +176,8 @@
             }
 
             [id$="TableWrap"] tr {
-                background: rgba(13, 27, 42, 0.5);
-                border: 1px solid rgba(168, 218, 220, 0.3);
+                background: #f0f2f5;
+                border: 1px solid #e0e0e0;
                 border-radius: 10px;
                 padding: 10px 12px;
                 margin-bottom: 12px;
@@ -198,7 +200,7 @@
             [id$="TableWrap"] td::before {
                 content: attr(data-label);
                 font-weight: 600;
-                color: var(--accent);
+                color: var(--accent-text);
                 text-align: left;
                 flex-shrink: 0;
             }
@@ -291,7 +293,7 @@
     <div class="container" id="loginView">
         <div class="auth-form">
             <h2><i class="fas fa-user-shield"></i> Admin Login</h2>
-            <p style="color: var(--accent); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">
+            <p style="color: var(--accent-text); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">
                 Placeholder single-account auth (ADMIN_USERNAME / ADMIN_PASSWORD env vars).
                 Replace with real role-based auth before production use.
             </p>
