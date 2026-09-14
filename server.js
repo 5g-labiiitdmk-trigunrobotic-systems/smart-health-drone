@@ -271,7 +271,7 @@ function generateZegoToken04(appId, userId, secret, effectiveTimeInSeconds, payl
 }
 
 app.post('/api/zego-token', (req, res) => {
-    const { userId, roomId } = req.body || {};
+    const { userId, roomId, userName } = req.body || {};
     if (!userId) {
         return res.status(400).json({ error: 'userId is required.' });
     }
@@ -284,17 +284,30 @@ app.post('/api/zego-token', (req, res) => {
     try {
         // ZegoUIKitPrebuilt requires the payload to be a JSON-encoded
         // privilege object (room_id + login/publish permissions), not a
-        // bare room-id string -- a plain string here is what was causing
-        // the UIKit SDK's internal payload parsing to fail with a
-        // "kitToken error" / "getVersion of undefined" crash on the
-        // client, even though the surrounding Token04 envelope was valid.
+        // bare room-id string.
         // See ZegoCloud's own zego_server_assistant sample-rtc-room.js.
         const payload = JSON.stringify({
             room_id: roomId || '',
             privilege: { 1: 1, 2: 1 }, // 1: loginRoom, 2: publishStream - both allowed
             stream_id_list: null
         });
-        const token = generateZegoToken04(ZEGO_APP_ID, userId, ZEGO_SERVER_SECRET, 3600, payload);
+        const rawToken = generateZegoToken04(ZEGO_APP_ID, userId, ZEGO_SERVER_SECRET, 3600, payload);
+
+        // ZegoUIKitPrebuilt.create() does NOT accept a bare Token04 string --
+        // it expects the special "kitToken" format its own
+        // generateKitTokenForProduction() produces: `<token04>#<base64 JSON>`
+        // where the JSON carries {userID, roomID, userName, appID}. Without
+        // the '#' suffix the SDK's internal parser (which splits on '#')
+        // silently fails with "kitToken error" and then crashes trying to
+        // call .getVersion() on the engine instance it never created.
+        const kitTokenSuffix = Buffer.from(JSON.stringify({
+            userID: userId,
+            roomID: roomId || '',
+            userName: encodeURIComponent(userName || userId),
+            appID: ZEGO_APP_ID
+        })).toString('base64');
+        const token = `${rawToken}#${kitTokenSuffix}`;
+
         res.json({ token, appId: ZEGO_APP_ID });
     } catch (err) {
         console.error('Zego token generation failed:', err.message);
