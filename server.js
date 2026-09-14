@@ -1,5 +1,4 @@
 require('dotenv').config();
-const crypto = require('crypto');
 const fs = require('fs');
 const express = require('express');
 const http = require('http');
@@ -185,133 +184,71 @@ app.get('/api/drones', (req, res) => {
     res.json({ users });
 });
 
-// --- ZegoCloud Kit Token generation (server-side, production-safe) ---
-// Implements the ZEGOCLOUD "Token04" scheme so appID/serverSecret never
-// reach the browser. This is ZegoCloud's own reference implementation,
-// vendored from their official zego_server_assistant repo (Node sample at
-// token/nodejs/server/zegoServerAssistant.js) rather than hand-rolled --
-// ZegoCloud does not publish this as an npm package, only as source to
-// copy into your project. See https://docs.zegocloud.com and
-// https://github.com/zegocloud/zego_server_assistant for the current docs.
-const ZEGO_APP_ID = process.env.ZEGO_APP_ID ? Number(process.env.ZEGO_APP_ID) : null;
-const ZEGO_SERVER_SECRET = process.env.ZEGO_SERVER_SECRET || null;
+// --- Daily.co video call room creation (server-side, production-safe) ---
+// Replaces the previous ZegoCloud integration, which needed hand-rolled
+// token signing and repeatedly produced one-way calls (only the local
+// camera ever showed). Daily's REST API needs only a bearer API key and
+// returns a plain room URL the client joins directly with daily-js -- no
+// custom token format to get subtly wrong.
+const DAILY_API_KEY = process.env.DAILY_API_KEY || null;
 
-function zegoRandomInt(a, b) {
-    return Math.ceil((a + (b - a)) * Math.random());
-}
-
-function zegoMakeRandomIv() {
-    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-    const result = [];
-    for (let i = 0; i < 16; i++) {
-        result.push(chars.charAt(Math.floor(Math.random() * chars.length)));
+app.post('/api/create-room', async (req, res) => {
+    const { roomId } = req.body || {};
+    if (!roomId) {
+        return res.status(400).json({ error: 'roomId is required.' });
     }
-    return result.join('');
-}
-
-function zegoGetAlgorithm(keyBuf) {
-    switch (keyBuf.length) {
-        case 16: return 'aes-128-cbc';
-        case 24: return 'aes-192-cbc';
-        case 32: return 'aes-256-cbc';
-        default: throw new Error('Invalid key length: ' + keyBuf.length);
-    }
-}
-
-function zegoAesEncrypt(plainText, key, iv) {
-    const cipher = crypto.createCipheriv(zegoGetAlgorithm(Buffer.from(key)), key, iv);
-    cipher.setAutoPadding(true);
-    return Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
-}
-
-function generateZegoToken04(appId, userId, secret, effectiveTimeInSeconds, payload = '') {
-    if (!appId || typeof appId !== 'number') {
-        throw new Error('Invalid Zego token parameters: appId must be a number.');
-    }
-    if (!userId || typeof userId !== 'string') {
-        throw new Error('Invalid Zego token parameters: userId must be a string.');
-    }
-    if (!secret || typeof secret !== 'string' || secret.length !== 32) {
-        throw new Error('Invalid Zego token parameters: secret must be a 32-byte string.');
-    }
-    if (!effectiveTimeInSeconds || typeof effectiveTimeInSeconds !== 'number') {
-        throw new Error('Invalid Zego token parameters: effectiveTimeInSeconds must be a number.');
-    }
-
-    const createTime = Math.floor(Date.now() / 1000);
-    const tokenInfo = {
-        app_id: appId,
-        user_id: userId,
-        nonce: zegoRandomInt(-2147483648, 2147483647),
-        ctime: createTime,
-        expire: createTime + effectiveTimeInSeconds,
-        payload: payload || ''
-    };
-
-    const plainText = JSON.stringify(tokenInfo);
-    const iv = zegoMakeRandomIv();
-    const encrypted = zegoAesEncrypt(plainText, secret, iv);
-
-    const expireBuf = Buffer.alloc(8);
-    expireBuf.writeBigInt64BE(BigInt(tokenInfo.expire));
-    const ivLenBuf = Buffer.alloc(2);
-    ivLenBuf.writeUInt16BE(iv.length);
-    const encryptedLenBuf = Buffer.alloc(2);
-    encryptedLenBuf.writeUInt16BE(encrypted.length);
-
-    const buf = Buffer.concat([
-        expireBuf,
-        ivLenBuf,
-        Buffer.from(iv),
-        encryptedLenBuf,
-        encrypted
-    ]);
-
-    return '04' + buf.toString('base64');
-}
-
-app.post('/api/zego-token', (req, res) => {
-    const { userId, roomId, userName } = req.body || {};
-    if (!userId) {
-        return res.status(400).json({ error: 'userId is required.' });
-    }
-    if (!ZEGO_APP_ID || !ZEGO_SERVER_SECRET) {
+    if (!DAILY_API_KEY) {
         return res.status(500).json({
-            error: 'Zego credentials are not configured on the server. Set ZEGO_APP_ID and ZEGO_SERVER_SECRET.'
+            error: 'Daily.co is not configured on the server. Set DAILY_API_KEY.'
         });
     }
+
+    // Daily room names only allow letters, numbers, and hyphens/underscores.
+    const dailyRoomName = roomId.replace(/[^a-zA-Z0-9_-]/g, '-');
 
     try {
-        // ZegoUIKitPrebuilt requires the payload to be a JSON-encoded
-        // privilege object (room_id + login/publish permissions), not a
-        // bare room-id string.
-        // See ZegoCloud's own zego_server_assistant sample-rtc-room.js.
-        const payload = JSON.stringify({
-            room_id: roomId || '',
-            privilege: { 1: 1, 2: 1 }, // 1: loginRoom, 2: publishStream - both allowed
-            stream_id_list: null
+        const createRes = await fetch('https://api.daily.co/v1/rooms', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${DAILY_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: dailyRoomName,
+                properties: {
+                    // Auto-expire so test/emergency rooms don't accumulate
+                    // indefinitely on the Daily.co account.
+                    exp: Math.floor(Date.now() / 1000) + 6 * 3600,
+                    enable_chat: false,
+                    enable_screenshare: false
+                }
+            })
         });
-        const rawToken = generateZegoToken04(ZEGO_APP_ID, userId, ZEGO_SERVER_SECRET, 3600, payload);
 
-        // ZegoUIKitPrebuilt.create() does NOT accept a bare Token04 string --
-        // it expects the special "kitToken" format its own
-        // generateKitTokenForProduction() produces: `<token04>#<base64 JSON>`
-        // where the JSON carries {userID, roomID, userName, appID}. Without
-        // the '#' suffix the SDK's internal parser (which splits on '#')
-        // silently fails with "kitToken error" and then crashes trying to
-        // call .getVersion() on the engine instance it never created.
-        const kitTokenSuffix = Buffer.from(JSON.stringify({
-            userID: userId,
-            roomID: roomId || '',
-            userName: encodeURIComponent(userName || userId),
-            appID: ZEGO_APP_ID
-        })).toString('base64');
-        const token = `${rawToken}#${kitTokenSuffix}`;
+        if (createRes.status === 400) {
+            // Room with this name already exists (the drone/doctor pairing
+            // reuses the same roomId for both sides of the call) -- fetch
+            // its existing URL instead of treating this as an error.
+            const getRes = await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName}`, {
+                headers: { 'Authorization': `Bearer ${DAILY_API_KEY}` }
+            });
+            if (!getRes.ok) {
+                throw new Error(`Daily.co room lookup failed: HTTP ${getRes.status}`);
+            }
+            const existing = await getRes.json();
+            return res.json({ url: existing.url });
+        }
 
-        res.json({ token, appId: ZEGO_APP_ID });
+        if (!createRes.ok) {
+            const errBody = await createRes.text();
+            throw new Error(`Daily.co room creation failed: HTTP ${createRes.status} ${errBody}`);
+        }
+
+        const room = await createRes.json();
+        res.json({ url: room.url });
     } catch (err) {
-        console.error('Zego token generation failed:', err.message);
-        res.status(500).json({ error: 'Failed to generate video call token.' });
+        console.error('Daily.co room creation failed:', err.message);
+        res.status(502).json({ error: 'Failed to create video call room: ' + err.message });
     }
 });
 
