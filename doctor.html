@@ -155,29 +155,18 @@
             background-color: black;
             border-radius: 8px;
             overflow: hidden;
-            position: relative;
+            display: flex;
+            gap: 4px;
         }
 
-        #remote-video {
-            width: 100%;
+        #remote-video,
+        #local-video {
+            flex: 1;
+            width: 50%;
             height: 100%;
+            min-width: 0;
             object-fit: cover;
             background: #000;
-        }
-
-        #local-video {
-            position: absolute;
-            bottom: 8px;
-            right: 8px;
-            width: 28%;
-            max-width: 150px;
-            min-width: 80px;
-            aspect-ratio: 4 / 3;
-            height: auto;
-            border-radius: 6px;
-            border: 2px solid #fff;
-            object-fit: cover;
-            z-index: 2;
         }
 
         .console-section {
@@ -681,17 +670,25 @@
         // Guards against joining before this doctor is actually paired with
         // a drone (myRoomId would still be the private "solo_" fallback,
         // so the drone's Peer ID would be for a different pairing and
-        // never connect) and against starting the call twice.
-        let callStarted = false;
+        // never connect). Tracks which room the *current* call attempt is
+        // bound to (rather than just "has a call ever started") so that if
+        // startCall() runs again with a different, newer myRoomId -- e.g.
+        // the page auto-starts at load using a stale roomId left over in
+        // localStorage from an earlier pairing, and then acceptRequest()
+        // assigns a fresh one moments later -- it tears down the stale
+        // attempt and rebinds to the real one instead of silently staying
+        // stuck calling a Peer ID nobody is listening on.
+        let activeCallRoomId = null;
         let peerRetryTimeout;
 
         async function startCall() {
-            if (callStarted) return;
             if (myRoomId.startsWith('solo_')) {
                 addLogEntry('Not starting video call yet: no drone paired to this doctor.', 'info');
                 return;
             }
-            callStarted = true;
+            if (activeCallRoomId === myRoomId) return; // already bound to this exact room
+            activeCallRoomId = myRoomId;
+            clearTimeout(peerRetryTimeout);
             addLogEntry('Joining emergency video call...', 'info');
 
             // The drone side registers under this exact Peer ID once it
@@ -699,6 +696,10 @@
             // directly. Sanitized the same way on both sides.
             const dronePeerId = 'drone_' + myRoomId.replace(/[^a-zA-Z0-9_-]/g, '');
 
+            if (localVideoStream) {
+                localVideoStream.getTracks().forEach(track => track.stop());
+                localVideoStream = undefined;
+            }
             try {
                 localVideoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             } catch (err) {
@@ -740,6 +741,7 @@
         }
 
         function endVideoCall() {
+            activeCallRoomId = null;
             clearTimeout(peerRetryTimeout);
             if (currentVideoCall) {
                 currentVideoCall.close();
