@@ -667,14 +667,15 @@
                 maxUsers: 2,
                 layout: "Auto",
                 showLayoutButton: false,
-            });
-            
-            zp.on('roomStateChanged', (state) => {
-                if (state === 'CONNECTED') {
+                // ZegoUIKitPrebuilt doesn't expose a zp.on(...) event
+                // emitter -- room lifecycle events are wired up via these
+                // joinRoom() callbacks instead.
+                onJoinRoom: () => {
                     addLogEntry('Successfully connected to emergency video call.', 'success');
-                } else if (state === 'DISCONNECTED') {
+                },
+                onLeaveRoom: () => {
                     addLogEntry('Video call ended.', 'info');
-                }
+                },
             });
         }
 

@@ -2554,21 +2554,22 @@
                 maxUsers: 2,
                 layout: "Auto",
                 showLayoutButton: false,
-            });
-            
-            zp.on('roomStateChanged', (state) => {
-                if (state === 'CONNECTED') {
+                // ZegoUIKitPrebuilt doesn't expose a zp.on(...) event
+                // emitter -- room lifecycle events are wired up via these
+                // joinRoom() callbacks instead.
+                onJoinRoom: () => {
                     callStatusIndicator.style.backgroundColor = 'green';
                     callStatusText.textContent = 'Connected';
                     addLogEntry('Video call connected with doctor.', 'success');
-                } else if (state === 'DISCONNECTED') {
+                },
+                onLeaveRoom: () => {
                     callStatusIndicator.style.backgroundColor = 'red';
                     callStatusText.textContent = 'Disconnected';
                     videoCallContainer.style.display = 'none';
                     addLogEntry('Video call ended.', 'info');
-                }
+                },
             });
-            
+
             addLogEntry('Initiating video call with doctor...', 'info');
         });
 
