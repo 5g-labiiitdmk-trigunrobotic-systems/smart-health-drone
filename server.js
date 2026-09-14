@@ -282,7 +282,19 @@ app.post('/api/zego-token', (req, res) => {
     }
 
     try {
-        const token = generateZegoToken04(ZEGO_APP_ID, userId, ZEGO_SERVER_SECRET, 3600, roomId || '');
+        // ZegoUIKitPrebuilt requires the payload to be a JSON-encoded
+        // privilege object (room_id + login/publish permissions), not a
+        // bare room-id string -- a plain string here is what was causing
+        // the UIKit SDK's internal payload parsing to fail with a
+        // "kitToken error" / "getVersion of undefined" crash on the
+        // client, even though the surrounding Token04 envelope was valid.
+        // See ZegoCloud's own zego_server_assistant sample-rtc-room.js.
+        const payload = JSON.stringify({
+            room_id: roomId || '',
+            privilege: { 1: 1, 2: 1 }, // 1: loginRoom, 2: publishStream - both allowed
+            stream_id_list: null
+        });
+        const token = generateZegoToken04(ZEGO_APP_ID, userId, ZEGO_SERVER_SECRET, 3600, payload);
         res.json({ token, appId: ZEGO_APP_ID });
     } catch (err) {
         console.error('Zego token generation failed:', err.message);
