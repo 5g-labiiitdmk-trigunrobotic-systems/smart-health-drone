@@ -8,7 +8,7 @@ Doctor Monitoring Interface: Real-time video feed and patient monitoring
 
 Live GPS Tracking: Synchronized location data between drone and doctor interfaces
 
-Video Conferencing: Integrated ZegoCloud video calls for emergency consultations
+Video Conferencing: Integrated Daily.co video calls for emergency consultations
 
 Traffic Navigation: Advanced routing algorithms for efficient emergency response
 
@@ -30,7 +30,7 @@ Mapping: Leaflet.js with OpenStreetMap tiles
 
 Real-time Communication: Socket.IO
 
-Video Conferencing: ZegoCloud SDK
+Video Conferencing: Daily.co (daily-js)
 
 Backend: Node.js, Express.js
 

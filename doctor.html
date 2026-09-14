@@ -147,7 +147,7 @@
             font-size: 1.1rem;
         }
 
-        #zego-video-container {
+        #video-call-frame {
             width: 100%;
             height: 100%;
             flex: 1;
@@ -401,7 +401,7 @@
         <section class="video-section">
             <div class="video-call-container">
                 <h3 id="video-call-title-text"><i class="fas fa-video"></i> Emergency Video Call</h3>
-                <div id="zego-video-container"></div>
+                <div id="video-call-frame"></div>
                 <div style="display:flex; gap:8px; margin-top:10px;">
                     <input type="text" id="doctor-message-input" placeholder="Type a message for the drone to hear..." style="flex:1; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
                     <button id="doctor-message-send" style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
@@ -432,13 +432,13 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-    <script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
+    <script src="https://unpkg.com/@daily-co/daily-js"></script>
     <script>
         // Initialize variables
         let map;
         let ambulanceMarker, droneMarker, droneAmbulanceLine;
         const KURNOOL_COORDS = [15.8281, 78.0373]; // Default center for Kurnool
-        let zp; // ZegoCloud instance
+        let callFrame; // Daily.co call frame instance
         const socket = io(); // Connect to the Socket.IO server
 
         // Get DOM elements
@@ -645,10 +645,10 @@
             }
         });
 
-        // --- ZegoCloud Video Call Functionality ---
+        // --- Daily.co Video Call Functionality ---
         // Guards against joining before this doctor is actually paired with
         // a drone (myRoomId would still be the private "solo_" fallback,
-        // so the drone's video call would land in a different Zego room
+        // so the drone's video call would land in a different Daily room
         // and never connect) and against starting the call twice.
         let callStarted = false;
         async function startCall() {
@@ -660,68 +660,46 @@
             callStarted = true;
             addLogEntry('Joining emergency video call...', 'info');
 
-            // Unique room per drone/doctor pairing instead of a hardcoded
-            // '108_emergency' shared by every pair.
+            // Same roomId the drone side will request a room for, so both
+            // sides land in the identical Daily.co room for this pairing.
             const roomID = `emergency_${myRoomId}`;
-            const userID = 'doctor_' + Math.floor(Math.random() * 10000);
-            const userName = doctorName; // Use the retrieved doctor name
 
-            let kitToken;
+            let roomUrl;
             try {
-                const res = await fetch('/api/zego-token', {
+                const res = await fetch('/api/create-room', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: userID, roomId: roomID, userName: userName })
+                    body: JSON.stringify({ roomId: roomID })
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    throw new Error(data.error || 'Failed to get video call token.');
+                    throw new Error(data.error || 'Failed to create video call room.');
                 }
-                // The server already returns a complete, signed Token04 —
-                // use it as-is instead of the insecure client-side
-                // generateKitTokenForTest.
-                kitToken = data.token;
+                roomUrl = data.url;
             } catch (err) {
-                console.error('Video call token request failed:', err);
+                console.error('Video call room request failed:', err);
                 addLogEntry(`Failed to start video call: ${err.message}`, 'error');
                 return;
             }
 
-            // ZegoUIKitPrebuilt.create() reuses its existing engine
-            // singleton if one is already alive, so a repeat call after a
-            // previous hang-up in this same page would otherwise silently
-            // stay bound to the old room/token instead of the new one.
-            if (zp) {
-                zp.destroy();
-                zp = undefined;
+            // DailyIframe.createFrame() reuses its own single call object
+            // per frame, so destroy any previous one before creating a new
+            // frame for a fresh call attempt in the same page.
+            if (callFrame) {
+                callFrame.destroy();
+                callFrame = undefined;
             }
-            zp = ZegoUIKitPrebuilt.create(kitToken);
-            zp.joinRoom({
-                container: document.querySelector("#zego-video-container"),
-                scenario: {
-                    mode: ZegoUIKitPrebuilt.VideoConference,
-                },
-                turnOnMicrophoneWhenJoining: true,
-                turnOnCameraWhenJoining: true,
-                showMyCameraToggleButton: true,
-                showMyMicrophoneToggleButton: true,
-                showAudioVideoSettingsButton: true,
-                showScreenSharingButton: false,
-                showTextChat: true,
-                showUserList: true,
-                maxUsers: 2,
-                layout: "Grid",
-                showLayoutButton: false,
-                // ZegoUIKitPrebuilt doesn't expose a zp.on(...) event
-                // emitter -- room lifecycle events are wired up via these
-                // joinRoom() callbacks instead.
-                onJoinRoom: () => {
-                    addLogEntry('Successfully connected to emergency video call.', 'success');
-                },
-                onLeaveRoom: () => {
-                    addLogEntry('Video call ended.', 'info');
-                },
+            callFrame = DailyIframe.createFrame(document.getElementById('video-call-frame'), {
+                showLeaveButton: true,
+                iframeStyle: { width: '100%', height: '100%', border: '0' }
             });
+            callFrame.on('joined-meeting', () => {
+                addLogEntry('Successfully connected to emergency video call.', 'success');
+            });
+            callFrame.on('left-meeting', () => {
+                addLogEntry('Video call ended.', 'info');
+            });
+            callFrame.join({ url: roomUrl, userName: doctorName });
         }
 
         // --- Console Logging ---
