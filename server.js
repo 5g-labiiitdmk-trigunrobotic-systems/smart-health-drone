@@ -184,73 +184,13 @@ app.get('/api/drones', (req, res) => {
     res.json({ users });
 });
 
-// --- Daily.co video call room creation (server-side, production-safe) ---
-// Replaces the previous ZegoCloud integration, which needed hand-rolled
-// token signing and repeatedly produced one-way calls (only the local
-// camera ever showed). Daily's REST API needs only a bearer API key and
-// returns a plain room URL the client joins directly with daily-js -- no
-// custom token format to get subtly wrong.
-const DAILY_API_KEY = process.env.DAILY_API_KEY || null;
-
-app.post('/api/create-room', async (req, res) => {
-    const { roomId } = req.body || {};
-    if (!roomId) {
-        return res.status(400).json({ error: 'roomId is required.' });
-    }
-    if (!DAILY_API_KEY) {
-        return res.status(500).json({
-            error: 'Daily.co is not configured on the server. Set DAILY_API_KEY.'
-        });
-    }
-
-    // Daily room names only allow letters, numbers, and hyphens/underscores.
-    const dailyRoomName = roomId.replace(/[^a-zA-Z0-9_-]/g, '-');
-
-    try {
-        const createRes = await fetch('https://api.daily.co/v1/rooms', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${DAILY_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: dailyRoomName,
-                properties: {
-                    // Auto-expire so test/emergency rooms don't accumulate
-                    // indefinitely on the Daily.co account.
-                    exp: Math.floor(Date.now() / 1000) + 6 * 3600,
-                    enable_chat: false,
-                    enable_screenshare: false
-                }
-            })
-        });
-
-        if (createRes.status === 400) {
-            // Room with this name already exists (the drone/doctor pairing
-            // reuses the same roomId for both sides of the call) -- fetch
-            // its existing URL instead of treating this as an error.
-            const getRes = await fetch(`https://api.daily.co/v1/rooms/${dailyRoomName}`, {
-                headers: { 'Authorization': `Bearer ${DAILY_API_KEY}` }
-            });
-            if (!getRes.ok) {
-                throw new Error(`Daily.co room lookup failed: HTTP ${getRes.status}`);
-            }
-            const existing = await getRes.json();
-            return res.json({ url: existing.url });
-        }
-
-        if (!createRes.ok) {
-            const errBody = await createRes.text();
-            throw new Error(`Daily.co room creation failed: HTTP ${createRes.status} ${errBody}`);
-        }
-
-        const room = await createRes.json();
-        res.json({ url: room.url });
-    } catch (err) {
-        console.error('Daily.co room creation failed:', err.message);
-        res.status(502).json({ error: 'Failed to create video call room: ' + err.message });
-    }
-});
+// --- Video calls: Jitsi Meet (meet.jit.si) ---
+// No server-side involvement needed at all: a Jitsi room is just a
+// unique room name, joined directly by the client via the Jitsi Meet
+// External API against their free public server. The existing
+// per-connection roomId (already used for the Socket.IO pairing) is
+// reused as the Jitsi room name on both the drone.html/doctor.html
+// clients, so no new server code is required here.
 
 // --- Nearby hospitals (OpenStreetMap Overpass API, proxied server-side) ---
 app.get('/api/hospitals', async (req, res) => {
