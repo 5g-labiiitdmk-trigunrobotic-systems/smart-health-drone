@@ -1522,7 +1522,7 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-<script src="https://unpkg.com/@daily-co/daily-js"></script>
+<script src="https://meet.jit.si/external_api.js"></script>
 <script>
     // Initialize variables
     let map;
@@ -1581,10 +1581,10 @@
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
         let droneOperatorName = "Ambulance Drone";
         let doctorName = "Doctor";
-        // Daily.co call frame instance - hoisted so a repeat call (after
-        // hanging up and starting a new one in the same page) can
-        // destroy() the previous frame first.
-        let callFrame;
+        // Jitsi Meet External API instance - hoisted so a repeat call
+        // (after hanging up and starting a new one in the same page) can
+        // dispose() the previous instance first.
+        let jitsiApi;
         // Unique per-pairing room, assigned by the server when this drone
         // operator connected to a doctor from the portal page. Falls back to
         // a per-tab random id so testing without going through the portal
@@ -2536,56 +2536,43 @@
             callStatusIndicator.style.backgroundColor = 'orange';
             callStatusText.textContent = 'Connecting...';
 
-            // Same roomId the doctor side will request a room for, so both
-            // sides land in the identical Daily.co room for this pairing.
+            // Same roomId the doctor side uses, so both sides land in the
+            // identical Jitsi room for this pairing.
             const roomID = `emergency_${myRoomId}`;
 
-            let roomUrl;
-            try {
-                const res = await fetch('/api/create-room', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId: roomID })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || 'Failed to create video call room.');
-                }
-                roomUrl = data.url;
-            } catch (err) {
-                console.error('Video call room request failed:', err);
-                addLogEntry(`Failed to start video call: ${err.message}`, 'error');
-                callStatusIndicator.style.backgroundColor = 'red';
-                callStatusText.textContent = 'Disconnected';
-                videoCallContainer.style.display = 'none';
-                return;
+            // JitsiMeetExternalAPI keeps its own single connection per
+            // instance, so dispose() any previous one before creating a
+            // new instance for a fresh call attempt in the same page.
+            if (jitsiApi) {
+                jitsiApi.dispose();
+                jitsiApi = undefined;
             }
-
-            // DailyIframe.createFrame() reuses its own single call object
-            // per frame, so destroy any previous one before creating a new
-            // frame for a fresh call attempt in the same page.
-            if (callFrame) {
-                callFrame.destroy();
-                callFrame = undefined;
-            }
-            callFrame = DailyIframe.createFrame(document.getElementById('video-call-frame'), {
-                showLeaveButton: true,
-                iframeStyle: { width: '100%', height: '100%', border: '0' }
+            jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
+                roomName: roomID,
+                width: '100%',
+                height: '100%',
+                parentNode: document.getElementById('video-call-frame'),
+                userInfo: { displayName: droneOperatorName },
+                configOverwrite: { startWithAudioMuted: false, startWithVideoMuted: false },
+                interfaceConfigOverwrite: { SHOW_JITSI_WATERMARK: false }
             });
-            callFrame.on('joined-meeting', () => {
+            jitsiApi.addEventListener('videoConferenceJoined', () => {
                 callStatusIndicator.style.backgroundColor = 'green';
                 callStatusText.textContent = 'Connected';
                 addLogEntry('Video call connected with doctor.', 'success');
             });
-            callFrame.on('left-meeting', () => {
+            jitsiApi.addEventListener('videoConferenceLeft', () => {
                 callStatusIndicator.style.backgroundColor = 'red';
                 callStatusText.textContent = 'Disconnected';
                 videoCallContainer.style.display = 'none';
                 addLogEntry('Video call ended.', 'info');
             });
-            callFrame.join({ url: roomUrl, userName: droneOperatorName });
 
             addLogEntry('Initiating video call with doctor...', 'info');
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (jitsiApi) jitsiApi.dispose();
         });
 
         // Emergency call: raises a real request in the server's queue (so an
