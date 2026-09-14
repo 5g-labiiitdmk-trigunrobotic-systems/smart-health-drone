@@ -281,7 +281,7 @@ app.get('/api/hospitals', async (req, res) => {
     const query = `[out:json][timeout:25];node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});out body;`;
 
     try {
-        const data = await queryOverpass(query, { timeoutMs: 28000 });
+        const data = await queryOverpass(query);
         const hospitals = (data.elements || [])
             .filter(el => typeof el.lat === 'number' && typeof el.lon === 'number')
             .map(el => ({
@@ -295,6 +295,49 @@ app.get('/api/hospitals', async (req, res) => {
         console.error('Hospital lookup failed:', err.message);
         res.status(502).json({ error: 'Failed to fetch nearby hospitals: ' + err.message });
     }
+});
+
+// --- Real drone hardware telemetry ingestion ---
+// Env var needed: DRONE_TELEMETRY_API_KEY - shared secret hardware adapters
+// (see hardware-adapters/) must send as the x-api-key header. Requests
+// without a matching key are rejected with 401.
+const DRONE_TELEMETRY_API_KEY = process.env.DRONE_TELEMETRY_API_KEY || null;
+
+app.post('/api/drone-telemetry', (req, res) => {
+    const providedKey = req.headers['x-api-key'];
+    if (!DRONE_TELEMETRY_API_KEY || providedKey !== DRONE_TELEMETRY_API_KEY) {
+        return res.status(401).json({ error: 'Invalid or missing x-api-key.' });
+    }
+
+    const { droneId, lat, lng, altitude, heading, speed, battery, timestamp } = req.body || {};
+
+    if (!droneId || typeof droneId !== 'string' || droneId.trim() === '') {
+        return res.status(400).json({ error: 'droneId (non-empty string) is required.' });
+    }
+    if (typeof lat !== 'number' || Number.isNaN(lat) || lat < -90 || lat > 90) {
+        return res.status(400).json({ error: 'lat must be a number between -90 and 90.' });
+    }
+    if (typeof lng !== 'number' || Number.isNaN(lng) || lng < -180 || lng > 180) {
+        return res.status(400).json({ error: 'lng must be a number between -180 and 180.' });
+    }
+    for (const [field, value] of Object.entries({ altitude, heading, speed, battery })) {
+        if (value !== undefined && value !== null && (typeof value !== 'number' || Number.isNaN(value))) {
+            return res.status(400).json({ error: `${field}, if provided, must be a number.` });
+        }
+    }
+
+    const telemetry = {
+        droneId: droneId.trim(),
+        lat, lng,
+        altitude: typeof altitude === 'number' ? altitude : null,
+        heading: typeof heading === 'number' ? heading : null,
+        speed: typeof speed === 'number' ? speed : null,
+        battery: typeof battery === 'number' ? battery : null,
+        timestamp: typeof timestamp === 'number' ? timestamp : Date.now()
+    };
+
+    io.to('drone-telemetry-' + telemetry.droneId).emit('real-drone-position', telemetry);
+    res.json({ ok: true });
 });
 
 // --- A* road routing (OpenStreetMap Overpass API + server-side A*) ---

@@ -18,19 +18,23 @@
             --primary: #e63946;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --light: #f1faee;
-            --dark: #0d1b2a;
+            --accent-text: #1f7a80;
+            --light: #1a1a1a;
+            --dark: #f5f7fa;
             --success: #2a9d8f;
             --warning: #e9c46a;
+            --warning-text: #8a6d1a;
             --danger: #e76f51;
             --hospital: #8ecae6;
-            --map-overlay: rgba(13, 27, 42, 0.85);
+            --hospital-text: #2b6ca3;
+            --map-overlay: #f0f2f5;
             --iiit-blue: #1a3a5f;
             --iiit-gold: #d4af37;
+            --iiit-gold-text: #8a6d1a;
         }
 
         body {
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: #f5f7fa;
             color: var(--light);
             min-height: 100vh;
             display: flex;
@@ -39,13 +43,12 @@
         }
 
         header {
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             padding: 15px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            border-bottom: 1px solid #e0e0e0;
             z-index: 10;
             flex-shrink: 0;
         }
@@ -58,18 +61,18 @@
 
         .logo-icon {
             font-size: 2rem;
-            color: var(--hospital);
+            color: var(--hospital-text);
         }
 
         .logo-text {
             font-size: 1.5rem;
             font-weight: 700;
-            color: var(--accent);
+            color: var(--accent-text);
         }
         .logo-line-1{
             font-size: 1.5rem;
             font-weight: 600;
-            color: var(--iiit-gold);
+            color: var(--iiit-gold-text);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -77,15 +80,12 @@
         .logo-line-2{
             font-size: 1.8rem;
             font-weight: 700;
-            background: linear-gradient(to right, var(--accent), var(--primary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            color: var(--primary);
              margin: 3px 0;
         }
         .logo-line-3 {
              font-size: 0.9rem;
-             color: var(--accent);
+             color: var(--accent-text);
              font-weight: 500;
              letter-spacing: 0.5px;
         }
@@ -105,8 +105,7 @@
             border-radius: 15px;
             overflow: hidden;
             position: relative;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             min-height: 300px;
         }
 
@@ -128,11 +127,10 @@
         }
 
         .video-call-container {
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             border-radius: 15px;
             padding: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -141,7 +139,7 @@
         }
 
         .video-call-container h3 {
-            color: var(--accent);
+            color: var(--accent-text);
             margin-bottom: 10px;
             display: flex;
             align-items: center;
@@ -159,11 +157,10 @@
         }
 
         .console-section {
-            background: rgba(29, 53, 87, 0.85);
+            background: #ffffff;
             border-radius: 15px;
             padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(168, 218, 220, 0.3);
+            border: 1px solid #e0e0e0;
             margin: 10px;
             flex-shrink: 0;
             height: 200px;
@@ -176,7 +173,7 @@
             justify-content: space-between;
             align-items: center;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+            border-bottom: 1px solid #e0e0e0;
             margin-bottom: 10px;
         }
 
@@ -185,7 +182,7 @@
             align-items: center;
             gap: 10px;
             font-weight: 600;
-            color: var(--accent);
+            color: var(--accent-text);
         }
 
         .console-controls button {
@@ -203,7 +200,7 @@
 
         .console-content {
             flex: 1;
-            background: rgba(13, 27, 42, 0.7);
+            background: #f0f2f5;
             border-radius: 8px;
             padding: 10px;
             overflow-y: auto;
@@ -217,7 +214,7 @@
         }
 
         .log-timestamp {
-            color: var(--accent);
+            color: var(--accent-text);
             margin-right: 10px;
             font-weight: 600;
         }
@@ -245,7 +242,6 @@
             align-items: center;
             color: white;
             font-size: 16px;
-            box-shadow: 0 0 10px rgba(230, 57, 70, 0.7);
             border: 2px solid white;
             z-index: 1000;
         }
@@ -260,7 +256,6 @@
             align-items: center;
             color: white;
             font-size: 14px;
-            box-shadow: 0 0 8px rgba(168, 218, 220, 0.8);
             border: 2px solid white;
             z-index: 1001;
         }
@@ -379,22 +374,26 @@
     </header>
 
     <section class="pending-requests-section" style="
-        background: rgba(29, 53, 87, 0.7);
-        border-bottom: 1px solid rgba(168, 218, 220, 0.3);
+        background: #ffffff;
+        border-bottom: 1px solid #e0e0e0;
         padding: 15px 20px;
     ">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
-            <i class="fas fa-bell" style="color: var(--warning);"></i>
+            <i class="fas fa-bell" style="color: var(--warning-text);"></i>
             <strong>Pending Emergency Requests</strong>
         </div>
         <div id="pending-requests-list" style="display:flex; flex-wrap:wrap; gap:12px;">
-            <p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>
+            <p style="color: var(--accent-text); opacity:0.8;">No pending requests right now.</p>
         </div>
     </section>
 
     <div class="main-container">
-        <section class="map-section">
+        <section class="map-section" style="position:relative;">
             <div id="map"></div>
+            <div id="drone-data-badge" style="display:none; position:absolute; top:10px; left:10px; z-index:1000; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:8px 12px; font-size:0.85rem; color:#1a1a1a;">
+                <div><span id="drone-data-source-badge" style="background:#2a9d8f; color:#fff; padding:2px 8px; border-radius:4px; font-weight:600;">SIMULATED</span> <span id="drone-data-freshness">-</span></div>
+                <div style="margin-top:4px;">Battery: <span id="drone-data-battery">-</span>% | Heading: <span id="drone-data-heading">-</span>°</div>
+            </div>
         </section>
 
         <section class="video-section">
@@ -536,13 +535,13 @@
 
         function renderPendingRequests() {
             if (!pendingRequests.length) {
-                pendingRequestsList.innerHTML = '<p style="color: var(--accent); opacity:0.8;">No pending requests right now.</p>';
+                pendingRequestsList.innerHTML = '<p style="color: var(--accent-text); opacity:0.8;">No pending requests right now.</p>';
                 return;
             }
             pendingRequestsList.innerHTML = pendingRequests.map(r => `
                 <div class="pending-request-card" style="background: rgba(230,57,70,0.15); border: 1px solid var(--primary); border-radius: 10px; padding: 10px 15px;">
                     <div><strong>${r.operatorName}</strong></div>
-                    <div style="font-size: 0.8rem; color: var(--accent); margin-bottom: 8px;">
+                    <div style="font-size: 0.8rem; color: var(--accent-text); margin-bottom: 8px;">
                         Requested ${new Date(r.timestamp).toLocaleTimeString()}
                     </div>
                     <button class="btn" data-accept="${r.roomId}" style="background: var(--success); padding: 6px 14px; border: none; border-radius: 6px; color: white; cursor: pointer;">
@@ -595,6 +594,29 @@
             }
 
             addLogEntry(`GPS Update: Ambulance (${ambulanceCoords[0].toFixed(4)}, ${ambulanceCoords[1].toFixed(4)}), Drone (${droneCoords[0].toFixed(4)}, ${droneCoords[1].toFixed(4)})`, 'info');
+
+            // Show a Live/Simulated badge plus freshness and battery/heading
+            // when the drone side includes them (added for real hardware
+            // telemetry relay; harmless no-op for older simulated payloads).
+            if (data.source) {
+                const badge = document.getElementById('drone-data-badge');
+                const sourceBadge = document.getElementById('drone-data-source-badge');
+                badge.style.display = 'block';
+                if (data.source === 'real') {
+                    sourceBadge.textContent = 'LIVE';
+                    sourceBadge.style.background = '#e63946';
+                } else {
+                    sourceBadge.textContent = 'SIMULATED';
+                    sourceBadge.style.background = '#2a9d8f';
+                }
+                document.getElementById('drone-data-freshness').textContent = 'Updated ' + new Date().toLocaleTimeString();
+                if (data.drone && typeof data.drone.battery === 'number') {
+                    document.getElementById('drone-data-battery').textContent = data.drone.battery.toFixed(0);
+                }
+                if (data.drone && typeof data.drone.heading === 'number') {
+                    document.getElementById('drone-data-heading').textContent = data.drone.heading.toFixed(0);
+                }
+            }
         });
 
         // --- ZegoCloud Video Call Functionality ---
