@@ -634,7 +634,7 @@
                 const res = await fetch('/api/zego-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: userID, roomId: roomID })
+                    body: JSON.stringify({ userId: userID, roomId: roomID, userName: userName })
                 });
                 const data = await res.json();
                 if (!res.ok) {
