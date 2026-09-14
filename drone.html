@@ -2504,6 +2504,29 @@
         // Start video call with doctor
         startVideoCallBtn.addEventListener('click', async function() {
             videoCallContainer.style.display = 'flex';
+
+            // A single click should be enough to get on a call -- if this
+            // drone isn't paired with a doctor yet (myRoomId is still its
+            // private "solo_" placeholder), automatically raise the same
+            // emergency request the 108 button does and wait for a doctor
+            // to accept it, instead of requiring that as a separate manual
+            // step first.
+            if (myRoomId.startsWith('solo_')) {
+                callStatusIndicator.style.backgroundColor = 'orange';
+                callStatusText.textContent = 'Waiting for a doctor...';
+                addLogEntry('No doctor paired yet — requesting one now...', 'info');
+                requestEmergencyAssistance();
+                try {
+                    await waitForDoctorPairing();
+                } catch (err) {
+                    addLogEntry(err.message, 'error');
+                    callStatusIndicator.style.backgroundColor = 'red';
+                    callStatusText.textContent = 'Disconnected';
+                    videoCallContainer.style.display = 'none';
+                    return;
+                }
+            }
+
             callStatusIndicator.style.backgroundColor = 'orange';
             callStatusText.textContent = 'Connecting...';
 
@@ -2625,13 +2648,37 @@
             addLogEntry(`Emergency request queued (ref: ${roomId.slice(0, 8)}).`, 'info');
         });
 
+        // Resolved by the 'assignedDoctor' handler below once a doctor
+        // accepts the pending request the video-call button raised.
+        let pendingDoctorPairResolve = null;
+        let pendingDoctorPairReject = null;
+        function waitForDoctorPairing(timeoutMs = 60000) {
+            return new Promise((resolve, reject) => {
+                pendingDoctorPairResolve = resolve;
+                pendingDoctorPairReject = reject;
+                setTimeout(() => {
+                    if (pendingDoctorPairReject) {
+                        pendingDoctorPairReject(new Error('No doctor accepted the call in time. Try again once a doctor is online.'));
+                        pendingDoctorPairResolve = null;
+                        pendingDoctorPairReject = null;
+                    }
+                }, timeoutMs);
+            });
+        }
+
         socket.on('assignedDoctor', (connection) => {
             myRoomId = connection.roomId;
             localStorage.setItem('currentConnection', JSON.stringify(connection));
             doctorName = connection.doctorName;
             videoCallHeaderText.textContent = `Video Call with ${doctorName}`;
             addLogEntry(`Doctor ${doctorName} accepted your call and is now connected.`, 'success');
-            alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
+            if (pendingDoctorPairResolve) {
+                pendingDoctorPairResolve();
+                pendingDoctorPairResolve = null;
+                pendingDoctorPairReject = null;
+            } else {
+                alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
+            }
         });
 
         document.getElementById("doctor-close-panel").addEventListener("click", function () {
