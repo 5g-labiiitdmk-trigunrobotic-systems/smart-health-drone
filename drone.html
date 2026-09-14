@@ -411,8 +411,8 @@
             top: 50%; /* Center vertically */
             left: 50%; /* Center horizontally */
             transform: translate(-50%, -50%); /* Adjust for centering */
-            width: 480px; /* Default desktop width */
-            height: 340px; /* Default desktop height */
+            width: 640px; /* Default desktop width -- wide enough for two side-by-side (Grid layout) video tiles */
+            height: 400px; /* Default desktop height */
             max-width: 90vw; /* Max width relative to viewport */
             max-height: 90vh; /* Max height relative to viewport */
             background-color: rgba(0, 0, 0, 0.85);
@@ -1020,10 +1020,12 @@
                 min-height: 44px;
             }
 
-            /* Adjust video call container for mobile */
+            /* Adjust video call container for mobile -- wide enough for
+               two side-by-side (Grid layout) video tiles instead of the
+               single speaker view this was originally sized for. */
             .video-call-container {
-                width: 70vw; /* Smaller default width */
-                height: 50vh; /* Smaller default height */
+                width: 90vw;
+                height: 60vh;
                 min-width: unset; /* Remove min-width constraint */
                 min-height: unset; /* Remove min-height constraint */
                 top: 50%;
@@ -1044,10 +1046,10 @@
             }
 
             .video-call-container {
-                width: 60vw; /* Even smaller default width */
-                height: 30vh; /* Even smaller default height */
-                min-width: 200px; /* Ensure it's not too small to be unusable */
-                min-height: 150px;
+                width: 94vw;
+                height: 55vh;
+                min-width: 280px; /* Ensure it's not too small to be unusable */
+                min-height: 220px;
             }
             .video-call-header {
                 font-size: 0.8rem;
