@@ -158,6 +158,25 @@
             position: relative;
         }
 
+        #remote-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
+
+        #local-video {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 30%;
+            max-width: 160px;
+            border-radius: 6px;
+            border: 2px solid #fff;
+            object-fit: cover;
+            z-index: 2;
+        }
+
         .console-section {
             background: #ffffff;
             border-radius: 15px;
@@ -400,8 +419,14 @@
 
         <section class="video-section">
             <div class="video-call-container">
-                <h3 id="video-call-title-text"><i class="fas fa-video"></i> Emergency Video Call</h3>
-                <div id="video-call-frame"></div>
+                <h3 id="video-call-title-text">
+                    <i class="fas fa-video"></i> Emergency Video Call
+                    <button id="end-call-btn" style="margin-left:auto; padding:2px 10px; border:none; border-radius:6px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.8rem;">End</button>
+                </h3>
+                <div id="video-call-frame">
+                    <video id="remote-video" autoplay playsinline></video>
+                    <video id="local-video" autoplay playsinline muted></video>
+                </div>
                 <div style="display:flex; gap:8px; margin-top:10px;">
                     <input type="text" id="doctor-message-input" placeholder="Type a message for the drone to hear..." style="flex:1; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
                     <button id="doctor-message-send" style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
@@ -432,13 +457,15 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-    <script src="https://meet.jit.si/external_api.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script>
         // Initialize variables
         let map;
         let ambulanceMarker, droneMarker, droneAmbulanceLine;
         const KURNOOL_COORDS = [15.8281, 78.0373]; // Default center for Kurnool
-        let jitsiApi; // Jitsi Meet External API instance
+        let videoPeer;
+        let currentVideoCall;
+        let localVideoStream;
         const socket = io(); // Connect to the Socket.IO server
 
         // Get DOM elements
@@ -645,13 +672,15 @@
             }
         });
 
-        // --- Jitsi Meet Video Call Functionality ---
+        // --- PeerJS Video Call Functionality ---
         // Guards against joining before this doctor is actually paired with
         // a drone (myRoomId would still be the private "solo_" fallback,
-        // so the drone's video call would land in a different Jitsi room
-        // and never connect) and against starting the call twice.
+        // so the drone's Peer ID would be for a different pairing and
+        // never connect) and against starting the call twice.
         let callStarted = false;
-        function startCall() {
+        let peerRetryTimeout;
+
+        async function startCall() {
             if (callStarted) return;
             if (myRoomId.startsWith('solo_')) {
                 addLogEntry('Not starting video call yet: no drone paired to this doctor.', 'info');
@@ -660,37 +689,70 @@
             callStarted = true;
             addLogEntry('Joining emergency video call...', 'info');
 
-            // Same roomId the drone side uses, so both sides land in the
-            // identical Jitsi room for this pairing.
-            const roomID = `emergency_${myRoomId}`;
+            // The drone side registers under this exact Peer ID once it
+            // starts its own video call -- this doctor calls into it
+            // directly. Sanitized the same way on both sides.
+            const dronePeerId = 'drone_' + myRoomId.replace(/[^a-zA-Z0-9_-]/g, '');
 
-            // JitsiMeetExternalAPI keeps its own single connection per
-            // instance, so dispose() any previous one before creating a
-            // new instance for a fresh call attempt in the same page.
-            if (jitsiApi) {
-                jitsiApi.dispose();
-                jitsiApi = undefined;
+            try {
+                localVideoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (err) {
+                addLogEntry(`Camera/microphone access failed: ${err.message}`, 'error');
+                return;
             }
-            jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-                roomName: roomID,
-                width: '100%',
-                height: '100%',
-                parentNode: document.getElementById('video-call-frame'),
-                userInfo: { displayName: doctorName },
-                configOverwrite: { startWithAudioMuted: false, startWithVideoMuted: false },
-                interfaceConfigOverwrite: { SHOW_JITSI_WATERMARK: false }
+            document.getElementById('local-video').srcObject = localVideoStream;
+
+            // A Peer object can only be used once, so tear down any
+            // previous one before a fresh call attempt in the same page.
+            if (videoPeer) {
+                videoPeer.destroy();
+                videoPeer = undefined;
+            }
+            videoPeer = new Peer();
+            videoPeer.on('open', () => {
+                callDrone(dronePeerId);
             });
-            jitsiApi.addEventListener('videoConferenceJoined', () => {
-                addLogEntry('Successfully connected to emergency video call.', 'success');
-            });
-            jitsiApi.addEventListener('videoConferenceLeft', () => {
-                addLogEntry('Video call ended.', 'info');
+            videoPeer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    // The drone hasn't started its own video call yet --
+                    // keep retrying until it does.
+                    addLogEntry('Drone has not joined the call yet — retrying...', 'info');
+                    peerRetryTimeout = setTimeout(() => callDrone(dronePeerId), 3000);
+                } else {
+                    addLogEntry(`Video call error: ${err.message}`, 'error');
+                }
             });
         }
 
-        window.addEventListener('beforeunload', () => {
-            if (jitsiApi) jitsiApi.dispose();
-        });
+        function callDrone(dronePeerId) {
+            if (!videoPeer || videoPeer.destroyed) return;
+            currentVideoCall = videoPeer.call(dronePeerId, localVideoStream);
+            currentVideoCall.on('stream', (remoteStream) => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+                addLogEntry('Successfully connected to emergency video call.', 'success');
+            });
+            currentVideoCall.on('close', endVideoCall);
+        }
+
+        function endVideoCall() {
+            clearTimeout(peerRetryTimeout);
+            if (currentVideoCall) {
+                currentVideoCall.close();
+                currentVideoCall = undefined;
+            }
+            if (videoPeer) {
+                videoPeer.destroy();
+                videoPeer = undefined;
+            }
+            if (localVideoStream) {
+                localVideoStream.getTracks().forEach(track => track.stop());
+                localVideoStream = undefined;
+            }
+            addLogEntry('Video call ended.', 'info');
+        }
+
+        document.getElementById('end-call-btn').addEventListener('click', endVideoCall);
+        window.addEventListener('beforeunload', endVideoCall);
 
         // --- Console Logging ---
         function addLogEntry(message, type) {
