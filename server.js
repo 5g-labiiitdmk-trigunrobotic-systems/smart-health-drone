@@ -281,7 +281,7 @@ app.get('/api/hospitals', async (req, res) => {
     const query = `[out:json][timeout:25];node["amenity"="hospital"](around:${radiusMeters},${lat},${lng});out body;`;
 
     try {
-        const data = await queryOverpass(query);
+        const data = await queryOverpass(query, { timeoutMs: 28000 });
         const hospitals = (data.elements || [])
             .filter(el => typeof el.lat === 'number' && typeof el.lon === 'number')
             .map(el => ({
