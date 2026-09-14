@@ -237,29 +237,42 @@
             flex: 1 1 380px;
             min-width: 0;
             position: relative;
-            height: 320px;
-            border-radius: 14px;
-            overflow: hidden;
+            height: 340px;
         }
 
         .hero-drone-img {
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: cover;
+            object-fit: contain;
+            /* Fades the photo's edges to transparent so it blends into the
+               hero section's own gradient background instead of sitting in
+               a hard-edged box. */
+            -webkit-mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, #000 55%, transparent 100%);
+            mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, #000 55%, transparent 100%);
+        }
+
+        /* Soft diagonal light accent in the corner, echoing the reference
+           design's geometric overlay shape. */
+        .hero-image-wrap::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 50%;
+            height: 50%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 55%, rgba(255, 255, 255, 0.85) 100%);
+            clip-path: polygon(100% 0, 100% 100%, 0 100%);
+            pointer-events: none;
         }
 
         .hero-image-overlay {
             position: absolute;
-            top: 16px;
-            right: 16px;
+            top: 10%;
+            right: 0;
             text-align: right;
-            color: #ffffff;
+            color: var(--iiit-blue);
             max-width: 170px;
-            padding: 10px 14px;
-            background: linear-gradient(135deg, rgba(20, 40, 80, 0.55), rgba(20, 40, 80, 0.25));
-            border-radius: 10px;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
         }
 
         .hero-overlay-caption {
@@ -273,14 +286,14 @@
         .hero-overlay-divider {
             width: 40px;
             height: 2px;
-            background: #7fd6c9;
+            background: var(--accent-text);
             margin: 10px 0 10px auto;
         }
 
         .hero-overlay-subcaption {
             font-size: 0.75rem;
             font-weight: 600;
-            color: #e2e8f0;
+            color: #4a5568;
             line-height: 1.4;
         }
 
@@ -466,46 +479,6 @@
             border-radius: 999px;
         }
 
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 15px;
-            padding: 20px 25px;
-            margin-bottom: 40px;
-            flex-wrap: wrap;
-        }
-
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .stat-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: #dcf1ec;
-            color: var(--accent-text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .stat-number {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--iiit-blue);
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: #6b7280;
-        }
 
         .footer-tagline-row {
             display: flex;
@@ -750,11 +723,6 @@
                 width: 100%;
             }
 
-            .stats-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
             .form-actions {
                 flex-wrap: wrap;
                 gap: 10px;
@@ -957,24 +925,6 @@
                 </div>
             </div>
 
-            <div class="stats-row">
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-drone"></i></div>
-                    <div><div class="stat-number">12</div><div class="stat-label">Registered Drones</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-user-md"></i></div>
-                    <div><div class="stat-number">36</div><div class="stat-label">Registered Doctors</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                    <div><div class="stat-number">~3 mins</div><div class="stat-label">Average Response Time</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
-                    <div><div class="stat-number">100%</div><div class="stat-label">Commitment to Safer Communities</div></div>
-                </div>
-            </div>
         </main>
 
         <footer>
