@@ -475,6 +475,27 @@
         #video-call-frame {
             width: 100%;
             height: 100%;
+            position: relative;
+            background: #000;
+        }
+
+        #remote-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
+
+        #local-video {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 30%;
+            max-width: 160px;
+            border-radius: 6px;
+            border: 2px solid #fff;
+            object-fit: cover;
+            z-index: 2;
         }
 
         /* Custom Resize Handle */
@@ -1361,10 +1382,14 @@
         <div class="video-call-status">
             <span class="status-indicator" id="call-status-indicator" style="background-color: red;"></span>
             <span id="call-status-text">Disconnected</span>
+            <button id="end-call-btn" style="margin-left:8px; padding:2px 10px; border:none; border-radius:6px; background:#e63946; color:#fff; cursor:pointer; font-size:0.8rem;">End</button>
         </div>
     </div>
     <div class="video-call-content">
-        <div id="video-call-frame"></div>
+        <div id="video-call-frame">
+            <video id="remote-video" autoplay playsinline></video>
+            <video id="local-video" autoplay playsinline muted></video>
+        </div>
     </div>
     <div class="video-call-resize-handle"></div> <!-- New resize handle -->
 </div>
@@ -1522,7 +1547,7 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-<script src="https://meet.jit.si/external_api.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
     // Initialize variables
     let map;
@@ -1581,10 +1606,12 @@
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
         let droneOperatorName = "Ambulance Drone";
         let doctorName = "Doctor";
-        // Jitsi Meet External API instance - hoisted so a repeat call
-        // (after hanging up and starting a new one in the same page) can
-        // dispose() the previous instance first.
-        let jitsiApi;
+        // PeerJS video call state - hoisted so a repeat call (after
+        // hanging up and starting a new one in the same page) can tear
+        // down the previous Peer/stream first.
+        let videoPeer;
+        let currentVideoCall;
+        let localVideoStream;
         // Unique per-pairing room, assigned by the server when this drone
         // operator connected to a doctor from the portal page. Falls back to
         // a per-tab random id so testing without going through the portal
@@ -2536,44 +2563,75 @@
             callStatusIndicator.style.backgroundColor = 'orange';
             callStatusText.textContent = 'Connecting...';
 
-            // Same roomId the doctor side uses, so both sides land in the
-            // identical Jitsi room for this pairing.
-            const roomID = `emergency_${myRoomId}`;
+            // The drone registers as the callee under a fixed, well-known
+            // Peer ID derived from the shared pairing roomId -- the doctor
+            // side calls this exact ID directly once it has its own local
+            // stream ready. Peer IDs are alphanumeric-ish; sanitize to be
+            // safe since myRoomId can be a UUID (hyphens) or "solo_..."
+            // (underscore).
+            const peerId = 'drone_' + myRoomId.replace(/[^a-zA-Z0-9_-]/g, '');
 
-            // JitsiMeetExternalAPI keeps its own single connection per
-            // instance, so dispose() any previous one before creating a
-            // new instance for a fresh call attempt in the same page.
-            if (jitsiApi) {
-                jitsiApi.dispose();
-                jitsiApi = undefined;
-            }
-            jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-                roomName: roomID,
-                width: '100%',
-                height: '100%',
-                parentNode: document.getElementById('video-call-frame'),
-                userInfo: { displayName: droneOperatorName },
-                configOverwrite: { startWithAudioMuted: false, startWithVideoMuted: false },
-                interfaceConfigOverwrite: { SHOW_JITSI_WATERMARK: false }
-            });
-            jitsiApi.addEventListener('videoConferenceJoined', () => {
-                callStatusIndicator.style.backgroundColor = 'green';
-                callStatusText.textContent = 'Connected';
-                addLogEntry('Video call connected with doctor.', 'success');
-            });
-            jitsiApi.addEventListener('videoConferenceLeft', () => {
+            try {
+                localVideoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (err) {
+                addLogEntry(`Camera/microphone access failed: ${err.message}`, 'error');
                 callStatusIndicator.style.backgroundColor = 'red';
                 callStatusText.textContent = 'Disconnected';
                 videoCallContainer.style.display = 'none';
-                addLogEntry('Video call ended.', 'info');
+                return;
+            }
+            document.getElementById('local-video').srcObject = localVideoStream;
+
+            // A Peer object can only be used once, so tear down any
+            // previous one before a fresh call attempt in the same page.
+            if (videoPeer) {
+                videoPeer.destroy();
+                videoPeer = undefined;
+            }
+            videoPeer = new Peer(peerId);
+            videoPeer.on('open', () => {
+                callStatusText.textContent = 'Waiting for doctor to join...';
+                addLogEntry('Ready — waiting for the doctor to join the call.', 'info');
+            });
+            videoPeer.on('call', (call) => {
+                currentVideoCall = call;
+                call.answer(localVideoStream);
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('remote-video').srcObject = remoteStream;
+                    callStatusIndicator.style.backgroundColor = 'green';
+                    callStatusText.textContent = 'Connected';
+                    addLogEntry('Video call connected with doctor.', 'success');
+                });
+                call.on('close', endVideoCall);
+            });
+            videoPeer.on('error', (err) => {
+                addLogEntry(`Video call error: ${err.message}`, 'error');
             });
 
             addLogEntry('Initiating video call with doctor...', 'info');
         });
 
-        window.addEventListener('beforeunload', () => {
-            if (jitsiApi) jitsiApi.dispose();
-        });
+        function endVideoCall() {
+            if (currentVideoCall) {
+                currentVideoCall.close();
+                currentVideoCall = undefined;
+            }
+            if (videoPeer) {
+                videoPeer.destroy();
+                videoPeer = undefined;
+            }
+            if (localVideoStream) {
+                localVideoStream.getTracks().forEach(track => track.stop());
+                localVideoStream = undefined;
+            }
+            callStatusIndicator.style.backgroundColor = 'red';
+            callStatusText.textContent = 'Disconnected';
+            videoCallContainer.style.display = 'none';
+            addLogEntry('Video call ended.', 'info');
+        }
+
+        document.getElementById('end-call-btn').addEventListener('click', endVideoCall);
+        window.addEventListener('beforeunload', endVideoCall);
 
         // Emergency call: raises a real request in the server's queue (so an
         // available doctor can Accept it from the doctor panel), and also

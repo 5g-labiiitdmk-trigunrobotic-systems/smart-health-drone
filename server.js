@@ -184,13 +184,14 @@ app.get('/api/drones', (req, res) => {
     res.json({ users });
 });
 
-// --- Video calls: Jitsi Meet (meet.jit.si) ---
-// No server-side involvement needed at all: a Jitsi room is just a
-// unique room name, joined directly by the client via the Jitsi Meet
-// External API against their free public server. The existing
-// per-connection roomId (already used for the Socket.IO pairing) is
-// reused as the Jitsi room name on both the drone.html/doctor.html
-// clients, so no new server code is required here.
+// --- Video calls: PeerJS (direct browser-to-browser WebRTC) ---
+// No server-side involvement needed at all: PeerJS's free public
+// PeerServer brokers the initial connection between the two browsers'
+// Peer objects, then media flows directly peer-to-peer. The drone
+// registers under a Peer ID derived from the existing per-connection
+// roomId (already used for the Socket.IO pairing), and the doctor
+// calls that exact ID -- both entirely client-side in
+// drone.html/doctor.html, so no new server code is required here.
 
 // --- Nearby hospitals (OpenStreetMap Overpass API, proxied server-side) ---
 app.get('/api/hospitals', async (req, res) => {

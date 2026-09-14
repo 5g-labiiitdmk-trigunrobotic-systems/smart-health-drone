@@ -8,7 +8,7 @@ Doctor Monitoring Interface: Real-time video feed and patient monitoring
 
 Live GPS Tracking: Synchronized location data between drone and doctor interfaces
 
-Video Conferencing: Integrated Jitsi Meet (meet.jit.si) video calls for emergency consultations
+Video Conferencing: Integrated PeerJS (direct WebRTC) video calls for emergency consultations
 
 Traffic Navigation: Advanced routing algorithms for efficient emergency response
 
@@ -30,7 +30,7 @@ Mapping: Leaflet.js with OpenStreetMap tiles
 
 Real-time Communication: Socket.IO
 
-Video Conferencing: Jitsi Meet External API (meet.jit.si)
+Video Conferencing: PeerJS (peerjs.min.js)
 
 Backend: Node.js, Express.js
 
