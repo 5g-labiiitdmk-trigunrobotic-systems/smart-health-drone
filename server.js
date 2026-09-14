@@ -187,61 +187,83 @@ app.get('/api/drones', (req, res) => {
 
 // --- ZegoCloud Kit Token generation (server-side, production-safe) ---
 // Implements the ZEGOCLOUD "Token04" scheme so appID/serverSecret never
-// reach the browser. See ZEGOCLOUD server-assistant docs for the format.
+// reach the browser. This is ZegoCloud's own reference implementation,
+// vendored from their official zego_server_assistant repo (Node sample at
+// token/nodejs/server/zegoServerAssistant.js) rather than hand-rolled --
+// ZegoCloud does not publish this as an npm package, only as source to
+// copy into your project. See https://docs.zegocloud.com and
+// https://github.com/zegocloud/zego_server_assistant for the current docs.
 const ZEGO_APP_ID = process.env.ZEGO_APP_ID ? Number(process.env.ZEGO_APP_ID) : null;
 const ZEGO_SERVER_SECRET = process.env.ZEGO_SERVER_SECRET || null;
 
-function makeRandomIv() {
+function zegoRandomInt(a, b) {
+    return Math.ceil((a + (b - a)) * Math.random());
+}
+
+function zegoMakeRandomIv() {
     const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-    let result = '';
+    const result = [];
     for (let i = 0; i < 16; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+        result.push(chars.charAt(Math.floor(Math.random() * chars.length)));
     }
-    return result;
+    return result.join('');
 }
 
-function numTo64Bit(num) {
-    const buf = Buffer.alloc(8);
-    buf.writeBigInt64BE(BigInt(num));
-    return buf;
+function zegoGetAlgorithm(keyBuf) {
+    switch (keyBuf.length) {
+        case 16: return 'aes-128-cbc';
+        case 24: return 'aes-192-cbc';
+        case 32: return 'aes-256-cbc';
+        default: throw new Error('Invalid key length: ' + keyBuf.length);
+    }
 }
 
-function numTo16Bit(num) {
-    const buf = Buffer.alloc(2);
-    buf.writeInt16BE(num);
-    return buf;
-}
-
-function aesEncrypt(plainText, key, iv) {
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+function zegoAesEncrypt(plainText, key, iv) {
+    const cipher = crypto.createCipheriv(zegoGetAlgorithm(Buffer.from(key)), key, iv);
     cipher.setAutoPadding(true);
     return Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
 }
 
 function generateZegoToken04(appId, userId, secret, effectiveTimeInSeconds, payload = '') {
-    if (!appId || !userId || !secret || secret.length !== 32) {
-        throw new Error('Invalid Zego token parameters: appId, userId and a 32-byte secret are required.');
+    if (!appId || typeof appId !== 'number') {
+        throw new Error('Invalid Zego token parameters: appId must be a number.');
+    }
+    if (!userId || typeof userId !== 'string') {
+        throw new Error('Invalid Zego token parameters: userId must be a string.');
+    }
+    if (!secret || typeof secret !== 'string' || secret.length !== 32) {
+        throw new Error('Invalid Zego token parameters: secret must be a 32-byte string.');
+    }
+    if (!effectiveTimeInSeconds || typeof effectiveTimeInSeconds !== 'number') {
+        throw new Error('Invalid Zego token parameters: effectiveTimeInSeconds must be a number.');
     }
 
     const createTime = Math.floor(Date.now() / 1000);
     const tokenInfo = {
         app_id: appId,
         user_id: userId,
-        nonce: Math.floor(Math.random() * 2147483647) - 1073741824,
+        nonce: zegoRandomInt(-2147483648, 2147483647),
         ctime: createTime,
         expire: createTime + effectiveTimeInSeconds,
-        payload
+        payload: payload || ''
     };
 
     const plainText = JSON.stringify(tokenInfo);
-    const iv = makeRandomIv();
-    const encrypted = aesEncrypt(plainText, secret, iv);
+    const iv = zegoMakeRandomIv();
+    const encrypted = zegoAesEncrypt(plainText, secret, iv);
+
+    const expireBuf = Buffer.alloc(8);
+    expireBuf.writeBigInt64BE(BigInt(tokenInfo.expire));
+    const ivLenBuf = Buffer.alloc(2);
+    ivLenBuf.writeUInt16BE(iv.length);
+    const encryptedLenBuf = Buffer.alloc(2);
+    encryptedLenBuf.writeUInt16BE(encrypted.length);
 
     const buf = Buffer.concat([
-        numTo64Bit(tokenInfo.expire),
-        numTo16Bit(iv.length),
+        expireBuf,
+        ivLenBuf,
         Buffer.from(iv),
-        numTo16Bit(encrypted.length),
+        encryptedLenBuf,
         encrypted
     ]);
 
@@ -601,10 +623,13 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 8003;
+// Render sets RENDER_EXTERNAL_URL to the service's actual live URL; fall
+// back to the known deployment for local/other environments.
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || 'https://trigun-smart-health-drone.onrender.com';
 // Listen on all network interfaces (0.0.0.0) to be accessible from other devices
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port: ${PORT}`);
-    console.log(`Drone interface: https://testfile6.onrender.com/drone.html`);
-    console.log(`Doctor interface: https://testfile6.onrender.com/doctor.html`);
-    console.log(`Main interface: https://testfile6.onrender.com/`);
+    console.log(`Drone interface: ${PUBLIC_URL}/drone.html`);
+    console.log(`Doctor interface: ${PUBLIC_URL}/doctor.html`);
+    console.log(`Main interface: ${PUBLIC_URL}/`);
 });
