@@ -571,6 +571,11 @@
                 videoCallTitleText.textContent = `Video Call with ${droneName}`;
 
                 addLogEntry(`Accepted emergency call from ${droneName}. Now receiving their live GPS and video feed.`, 'success');
+
+                // myRoomId is now the real shared room with this drone --
+                // safe to join the video call (startCall() no-ops if this
+                // doctor was still on the private "solo_" room before).
+                startCall();
             });
         }
 
@@ -620,7 +625,18 @@
         });
 
         // --- ZegoCloud Video Call Functionality ---
+        // Guards against joining before this doctor is actually paired with
+        // a drone (myRoomId would still be the private "solo_" fallback,
+        // so the drone's video call would land in a different Zego room
+        // and never connect) and against starting the call twice.
+        let callStarted = false;
         async function startCall() {
+            if (callStarted) return;
+            if (myRoomId.startsWith('solo_')) {
+                addLogEntry('Not starting video call yet: no drone paired to this doctor.', 'info');
+                return;
+            }
+            callStarted = true;
             addLogEntry('Joining emergency video call...', 'info');
 
             // Unique room per drone/doctor pairing instead of a hardcoded
@@ -732,7 +748,11 @@
             initMap();
             setInterval(updateSimulationTime, 1000);
 
-            // Auto-join call when page loads
+            // Auto-join call when page loads, but only if this doctor is
+            // already paired with a drone (e.g. a reload mid-call) --
+            // startCall() itself refuses to join while still on the
+            // private "solo_" room, so this is a no-op otherwise until
+            // acceptRequest() establishes a real pairing.
             setTimeout(() => {
                 startCall();
             }, 1000);
