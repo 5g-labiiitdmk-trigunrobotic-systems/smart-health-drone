@@ -668,6 +668,14 @@
                 return;
             }
 
+            // ZegoUIKitPrebuilt.create() reuses its existing engine
+            // singleton if one is already alive, so a repeat call after a
+            // previous hang-up in this same page would otherwise silently
+            // stay bound to the old room/token instead of the new one.
+            if (zp) {
+                zp.destroy();
+                zp = undefined;
+            }
             zp = ZegoUIKitPrebuilt.create(kitToken);
             zp.joinRoom({
                 container: document.querySelector("#zego-video-container"),

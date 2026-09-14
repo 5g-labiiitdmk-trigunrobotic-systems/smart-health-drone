@@ -1579,6 +1579,13 @@
         const currentConnection = JSON.parse(localStorage.getItem('currentConnection'));
         let droneOperatorName = "Ambulance Drone";
         let doctorName = "Doctor";
+        // ZegoCloud instance - hoisted so a repeat call (after hanging up
+        // and starting a new one in the same page) can destroy() the
+        // previous engine first. ZegoUIKitPrebuilt.create() silently
+        // reuses its existing internal engine singleton if one is already
+        // alive, so without an explicit destroy() a second call can look
+        // "connected" locally while still bound to the previous room.
+        let zp;
         // Unique per-pairing room, assigned by the server when this drone
         // operator connected to a doctor from the portal page. Falls back to
         // a per-tab random id so testing without going through the portal
@@ -2560,7 +2567,15 @@
                 return;
             }
 
-            const zp = ZegoUIKitPrebuilt.create(kitToken);
+            // ZegoUIKitPrebuilt.create() reuses its existing engine
+            // singleton if one is already alive, so a repeat call after a
+            // previous hang-up in this same page would otherwise silently
+            // stay bound to the old room/token instead of the new one.
+            if (zp) {
+                zp.destroy();
+                zp = undefined;
+            }
+            zp = ZegoUIKitPrebuilt.create(kitToken);
             zp.joinRoom({
                 container: document.querySelector("#zego-video-container"),
                 scenario: {
