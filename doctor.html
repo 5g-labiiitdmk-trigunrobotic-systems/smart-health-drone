@@ -384,6 +384,16 @@
                 padding: 8px 16px;
             }
 
+            /* #end-call-btn's inline style (padding:2px 10px, 0.8rem) is
+               far below the 44x44px minimum touch target -- fine with a
+               mouse pointer, unreliable to tap on a phone. */
+            #end-call-btn {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 10px 16px;
+                font-size: 0.9rem;
+            }
+
             .map-section {
                 height: 45vh;
                 min-height: 280px;
@@ -816,7 +826,15 @@
             addLogEntry('Video call ended.', 'info');
         }
 
-        document.getElementById('end-call-btn').addEventListener('click', endVideoCall);
+        // touchend fallback (with preventDefault, so the browser doesn't
+        // also fire a synthesized click and run endVideoCall twice) guards
+        // against any ancestor's touch handling ever swallowing the tap.
+        const endCallBtn = document.getElementById('end-call-btn');
+        endCallBtn.addEventListener('click', endVideoCall);
+        endCallBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            endVideoCall();
+        }, { passive: false });
         window.addEventListener('beforeunload', endVideoCall);
 
         // --- Console Logging ---
