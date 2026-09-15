@@ -1,5 +1,4 @@
 require('dotenv').config();
-const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -10,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
 const { computeRoute } = require('./routing');
 const { queryOverpass } = require('./overpass');
+const db = require('./db');
 
 // Secret used to sign admin session JWTs. Falls back to a random value
 // generated at process start (still secure, just invalidates existing
@@ -70,81 +70,20 @@ let pendingRequests = {};
 // status view and to notify a specific drone when a doctor accepts its call).
 let onlineUsers = new Map();
 
-// --- User store (interim JSON-file store; replace with a real DB later) ---
-const USERS_FILE = path.join(__dirname, 'users.json');
-
-function loadUsers() {
-    try {
-        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } catch (err) {
-        return [];
-    }
-}
-
-function saveUsers(users) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
 // Public-safe view of a user (never expose the password hash)
 function toPublicUser(user) {
     const { passwordHash, ...publicUser } = user;
     return publicUser;
 }
 
-// --- Historical emergency request log (persisted; survives restarts) ---
-const EMERGENCY_LOG_FILE = path.join(__dirname, 'emergency-log.json');
-
-function loadEmergencyLog() {
-    try {
-        return JSON.parse(fs.readFileSync(EMERGENCY_LOG_FILE, 'utf8'));
-    } catch (err) {
-        return [];
-    }
-}
-
-function saveEmergencyLog(log) {
-    fs.writeFileSync(EMERGENCY_LOG_FILE, JSON.stringify(log, null, 2));
-}
-
-function appendEmergencyLog(entry) {
-    const log = loadEmergencyLog();
-    log.push(entry);
-    saveEmergencyLog(log);
-    return entry;
-}
-
-// Updates the first log entry matching roomId + one of the given
-// current statuses, and returns it (or null if no match was found).
-function updateEmergencyLogByRoom(roomId, matchStatuses, changes) {
-    const log = loadEmergencyLog();
-    const entry = log.find(e => e.roomId === roomId && matchStatuses.includes(e.status));
-    if (!entry) return null;
-    Object.assign(entry, changes);
-    saveEmergencyLog(log);
-    return entry;
-}
-
-// --- Admin audit trail (persisted; who did what, and when) ---
-const AUDIT_LOG_FILE = path.join(__dirname, 'audit-log.json');
-
-function loadAuditLog() {
-    try {
-        return JSON.parse(fs.readFileSync(AUDIT_LOG_FILE, 'utf8'));
-    } catch (err) {
-        return [];
-    }
-}
-
 function appendAuditLog({ adminUserId, action, details }) {
-    const log = loadAuditLog();
-    log.push({
+    return db.appendAuditLog({
         id: uuidv4(),
         timestamp: Date.now(),
         adminUserId,
         action,
         details: details || null
     });
-    fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify(log, null, 2));
 }
 
 // Serve static files
@@ -167,61 +106,66 @@ app.get('/doctor.html', (req, res) => {
 
 // --- Registration / Login API (server-side, hashed passwords) ---
 app.post('/api/register', async (req, res) => {
-    const {
-        name, userId, email, phone, userType, password,
-        specialization, license, clinic,
-        city, village, state, country
-    } = req.body || {};
+    try {
+        const {
+            name, userId, email, phone, userType, password,
+            specialization, license, clinic,
+            city, village, state, country
+        } = req.body || {};
 
-    if (!name || !userId || !email || !phone || !userType || !password) {
-        return res.status(400).json({ error: 'Missing required registration fields.' });
-    }
-
-    const users = loadUsers();
-    if (users.some(u => u.userId === userId)) {
-        return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const newUser = {
-        name, userId, email, phone, userType, passwordHash,
-        // New doctor/drone-operator accounts require admin approval before
-        // they can log in; admin accounts (created through their own
-        // setup/create-admin endpoints) are never routed through here and
-        // remain immediately active.
-        status: 'pending',
-        skills: [],
-        workDetails: '',
-        metrics: {
-            assignedCases: 0,
-            completedTasks: 0,
-            responseTime: 0,
-            successRate: 100
+        if (!name || !userId || !email || !phone || !userType || !password) {
+            return res.status(400).json({ error: 'Missing required registration fields.' });
         }
-    };
 
-    if (userType === 'doctor') {
-        newUser.specialization = specialization || '';
-        newUser.license = license || '';
-        newUser.clinic = clinic || '';
-        newUser.metrics.onlineConsultations = 0;
-        newUser.metrics.emergencyResponses = 0;
-    } else if (userType === 'drone_operator') {
-        newUser.city = city || '';
-        newUser.village = village || '';
-        newUser.state = state || '';
-        newUser.country = country || '';
+        const users = await db.loadUsers();
+        if (users.some(u => u.userId === userId)) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const newUser = {
+            name, userId, email, phone, userType, passwordHash,
+            // New doctor/drone-operator accounts require admin approval before
+            // they can log in; admin accounts (created through their own
+            // setup/create-admin endpoints) are never routed through here and
+            // remain immediately active.
+            status: 'pending',
+            skills: [],
+            workDetails: '',
+            metrics: {
+                assignedCases: 0,
+                completedTasks: 0,
+                responseTime: 0,
+                successRate: 100
+            }
+        };
+
+        if (userType === 'doctor') {
+            newUser.specialization = specialization || '';
+            newUser.license = license || '';
+            newUser.clinic = clinic || '';
+            newUser.metrics.onlineConsultations = 0;
+            newUser.metrics.emergencyResponses = 0;
+        } else if (userType === 'drone_operator') {
+            newUser.city = city || '';
+            newUser.village = village || '';
+            newUser.state = state || '';
+            newUser.country = country || '';
+        }
+
+        users.push(newUser);
+        await db.saveUsers(users);
+
+        // Let any connected admin panel show a live "new registration" badge
+        // without needing to refresh or poll.
+        io.emit('newRegistrationPending', toPublicUser(newUser));
+
+        res.status(201).json({ user: toPublicUser(newUser), pendingApproval: true });
+    } catch (err) {
+        console.error('Registration failed:', err);
+        res.status(500).json({ error: 'Registration failed due to a server error. Please try again.' });
     }
-
-    users.push(newUser);
-    saveUsers(users);
-
-    // Let any connected admin panel show a live "new registration" badge
-    // without needing to refresh or poll.
-    io.emit('newRegistrationPending', toPublicUser(newUser));
-
-    res.status(201).json({ user: toPublicUser(newUser), pendingApproval: true });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -231,7 +175,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'User ID and password are required.' });
         }
 
-        const users = loadUsers();
+        const users = await db.loadUsers();
         const user = users.find(u => u.userId === userId);
         // A missing/corrupted passwordHash (e.g. a record from before
         // hashing was introduced, or written by an older code path) would
@@ -277,35 +221,12 @@ app.post('/api/logout', (req, res) => {
 
 // Lets doctor.html/drone.html/index.html confirm an existing session
 // (e.g. after a page reload) without resending credentials.
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
     const token = req.cookies && req.cookies[USER_COOKIE];
     if (!token) return res.status(401).json({ error: 'Not logged in.' });
     try {
         const payload = jwt.verify(token, ADMIN_JWT_SECRET);
-        const users = loadUsers();
-        const user = users.find(u => u.userId === payload.userId);
-        if (!user || user.status === 'rejected') {
-            return res.status(401).json({ error: 'Session no longer valid.' });
-        }
-        res.json({ user: toPublicUser(user) });
-    } catch (err) {
-        return res.status(401).json({ error: 'Session expired or invalid.' });
-    }
-});
-
-app.post('/api/logout', (req, res) => {
-    res.clearCookie(USER_COOKIE);
-    res.json({ success: true });
-});
-
-// Lets doctor.html/drone.html/index.html confirm an existing session
-// (e.g. after a page reload) without resending credentials.
-app.get('/api/me', (req, res) => {
-    const token = req.cookies && req.cookies[USER_COOKIE];
-    if (!token) return res.status(401).json({ error: 'Not logged in.' });
-    try {
-        const payload = jwt.verify(token, ADMIN_JWT_SECRET);
-        const users = loadUsers();
+        const users = await db.loadUsers();
         const user = users.find(u => u.userId === payload.userId);
         if (!user || user.status === 'rejected') {
             return res.status(401).json({ error: 'Session no longer valid.' });
@@ -318,21 +239,21 @@ app.get('/api/me', (req, res) => {
 
 // List registered users (public fields only) so the UI can show real
 // doctors/drone operators instead of a hardcoded list.
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
     const { userType } = req.query;
-    const users = loadUsers().map(toPublicUser);
+    const users = (await db.loadUsers()).map(toPublicUser);
     const filtered = userType ? users.filter(u => u.userType === userType) : users;
     res.json({ users: filtered });
 });
 
 // Convenience aliases over /api/users for populating doctor/drone dropdowns.
-app.get('/api/doctors', (req, res) => {
-    const users = loadUsers().map(toPublicUser).filter(u => u.userType === 'doctor');
+app.get('/api/doctors', async (req, res) => {
+    const users = (await db.loadUsers()).map(toPublicUser).filter(u => u.userType === 'doctor');
     res.json({ users });
 });
 
-app.get('/api/drones', (req, res) => {
-    const users = loadUsers().map(toPublicUser).filter(u => u.userType === 'drone_operator');
+app.get('/api/drones', async (req, res) => {
+    const users = (await db.loadUsers()).map(toPublicUser).filter(u => u.userType === 'drone_operator');
     res.json({ users });
 });
 
@@ -438,11 +359,11 @@ app.post('/api/route', async (req, res) => {
 });
 
 // --- Admin authentication (real, per-account, hashed + signed sessions) ---
-// Admin accounts live in the same users.json store as doctors/drone
-// operators, distinguished by userType === 'admin', with bcrypt-hashed
-// passwords exactly like every other account. Session state is a signed
-// JWT held in an httpOnly cookie (not readable/forgeable from client JS),
-// so there is no more in-memory token set and no shared env-var password.
+// Admin accounts live in the same user store as doctors/drone operators,
+// distinguished by userType === 'admin', with bcrypt-hashed passwords
+// exactly like every other account. Session state is a signed JWT held
+// in an httpOnly cookie (not readable/forgeable from client JS), so
+// there is no in-memory token set and no shared env-var password.
 const ADMIN_COOKIE = 'admin_session';
 const ADMIN_TOKEN_TTL = '12h';
 
@@ -466,84 +387,89 @@ function requireAdmin(req, res, next) {
 // extra admins after initial setup -- further admins are created by an
 // already-authenticated admin (see POST /api/admin/users below).
 app.post('/api/admin/setup', async (req, res) => {
-    const { name, userId, email, password } = req.body || {};
-    if (!name || !userId || !email || !password) {
-        return res.status(400).json({ error: 'name, userId, email and password are required.' });
-    }
-    if (password.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    }
+    try {
+        const { name, userId, email, password } = req.body || {};
+        if (!name || !userId || !email || !password) {
+            return res.status(400).json({ error: 'name, userId, email and password are required.' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+        }
 
-    const users = loadUsers();
-    if (users.some(u => u.userType === 'admin')) {
-        return res.status(403).json({ error: 'An admin account already exists. Setup is one-time only.' });
+        const users = await db.loadUsers();
+        if (users.some(u => u.userType === 'admin')) {
+            return res.status(403).json({ error: 'An admin account already exists. Setup is one-time only.' });
+        }
+        if (users.some(u => u.userId === userId)) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
+        users.push(newAdmin);
+        await db.saveUsers(users);
+
+        await appendAuditLog({ adminUserId: userId, action: 'admin_account_created', details: { via: 'initial_setup' } });
+
+        res.status(201).json({ user: toPublicUser(newAdmin) });
+    } catch (err) {
+        console.error('Admin setup failed:', err);
+        res.status(500).json({ error: 'Setup failed due to a server error. Please try again.' });
     }
-    if (users.some(u => u.userId === userId)) {
-        return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
-    users.push(newAdmin);
-    saveUsers(users);
-
-    appendAuditLog({ adminUserId: userId, action: 'admin_account_created', details: { via: 'initial_setup' } });
-
-    res.status(201).json({ user: toPublicUser(newAdmin) });
 });
 
 // Lets the dashboard know whether setup still needs to run, without
 // exposing anything about existing accounts.
-app.get('/api/admin/setup-status', (req, res) => {
-    const users = loadUsers();
+app.get('/api/admin/setup-status', async (req, res) => {
+    const users = await db.loadUsers();
     res.json({ setupRequired: !users.some(u => u.userType === 'admin') });
 });
 
 app.post('/api/admin/login', async (req, res) => {
-  try {
-    const { userId, password } = req.body || {};
-    if (!userId || !password) {
-        return res.status(400).json({ error: 'User ID and password are required.' });
+    try {
+        const { userId, password } = req.body || {};
+        if (!userId || !password) {
+            return res.status(400).json({ error: 'User ID and password are required.' });
+        }
+
+        const users = await db.loadUsers();
+        const admin = users.find(u => u.userId === userId && u.userType === 'admin');
+        if (!admin || !admin.passwordHash) {
+            return res.status(401).json({ error: 'Invalid admin credentials.' });
+        }
+
+        const match = await bcrypt.compare(password, admin.passwordHash);
+        if (!match) {
+            return res.status(401).json({ error: 'Invalid admin credentials.' });
+        }
+
+        const token = jwt.sign({ userId: admin.userId, role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: ADMIN_TOKEN_TTL });
+        res.cookie(ADMIN_COOKIE, token, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+            maxAge: 12 * 60 * 60 * 1000
+        });
+
+        await appendAuditLog({ adminUserId: admin.userId, action: 'admin_login' });
+
+        res.json({ user: toPublicUser(admin) });
+    } catch (err) {
+        console.error('Admin login failed:', err);
+        res.status(500).json({ error: 'Login failed due to a server error. Please try again.' });
     }
-
-    const users = loadUsers();
-    const admin = users.find(u => u.userId === userId && u.userType === 'admin');
-    if (!admin || !admin.passwordHash) {
-        return res.status(401).json({ error: 'Invalid admin credentials.' });
-    }
-
-    const match = await bcrypt.compare(password, admin.passwordHash);
-    if (!match) {
-        return res.status(401).json({ error: 'Invalid admin credentials.' });
-    }
-
-    const token = jwt.sign({ userId: admin.userId, role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: ADMIN_TOKEN_TTL });
-    res.cookie(ADMIN_COOKIE, token, {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
-        maxAge: 12 * 60 * 60 * 1000
-    });
-
-    appendAuditLog({ adminUserId: admin.userId, action: 'admin_login' });
-
-    res.json({ user: toPublicUser(admin) });
-  } catch (err) {
-    console.error('Admin login failed:', err);
-    res.status(500).json({ error: 'Login failed due to a server error. Please try again.' });
-  }
 });
 
-app.post('/api/admin/logout', requireAdmin, (req, res) => {
-    appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_logout' });
+app.post('/api/admin/logout', requireAdmin, async (req, res) => {
+    await appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_logout' });
     res.clearCookie(ADMIN_COOKIE);
     res.json({ success: true });
 });
 
 // Lets the dashboard confirm an existing session (e.g. after a page
 // reload) without needing to resend credentials.
-app.get('/api/admin/me', requireAdmin, (req, res) => {
-    const users = loadUsers();
+app.get('/api/admin/me', requireAdmin, async (req, res) => {
+    const users = await db.loadUsers();
     const admin = users.find(u => u.userId === req.adminUserId && u.userType === 'admin');
     if (!admin) return res.status(401).json({ error: 'Admin account no longer exists.' });
     res.json({ user: toPublicUser(admin) });
@@ -552,32 +478,37 @@ app.get('/api/admin/me', requireAdmin, (req, res) => {
 // Create additional admin accounts. Only an already-authenticated admin
 // can do this, so this is the ONLY path to more admins after setup.
 app.post('/api/admin/users', requireAdmin, async (req, res) => {
-    const { name, userId, email, password } = req.body || {};
-    if (!name || !userId || !email || !password) {
-        return res.status(400).json({ error: 'name, userId, email and password are required.' });
+    try {
+        const { name, userId, email, password } = req.body || {};
+        if (!name || !userId || !email || !password) {
+            return res.status(400).json({ error: 'name, userId, email and password are required.' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+        }
+
+        const users = await db.loadUsers();
+        if (users.some(u => u.userId === userId)) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
+        users.push(newAdmin);
+        await db.saveUsers(users);
+
+        await appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_account_created', details: { createdUserId: userId } });
+
+        res.status(201).json({ user: toPublicUser(newAdmin) });
+    } catch (err) {
+        console.error('Admin account creation failed:', err);
+        res.status(500).json({ error: 'Failed to create admin account due to a server error.' });
     }
-    if (password.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    }
-
-    const users = loadUsers();
-    if (users.some(u => u.userId === userId)) {
-        return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
-    users.push(newAdmin);
-    saveUsers(users);
-
-    appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_account_created', details: { createdUserId: userId } });
-
-    res.status(201).json({ user: toPublicUser(newAdmin) });
 });
 
 // Registered users annotated with live online/pairing status for the admin panel.
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-    const users = loadUsers().map(u => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    const users = (await db.loadUsers()).map(u => {
         const pub = toPublicUser(u);
         const pairing = Object.values(activeConnections).find(c =>
             c.doctorUserId === u.userId || c.operatorUserId === u.userId ||
@@ -594,24 +525,24 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 });
 
 // Accounts awaiting admin approval before they can log in.
-app.get('/api/admin/pending-users', requireAdmin, (req, res) => {
-    const users = loadUsers()
+app.get('/api/admin/pending-users', requireAdmin, async (req, res) => {
+    const users = (await db.loadUsers())
         .filter(u => u.status === 'pending')
         .map(toPublicUser);
     res.json({ users });
 });
 
-app.post('/api/admin/users/:userId/approve', requireAdmin, (req, res) => {
-    const users = loadUsers();
+app.post('/api/admin/users/:userId/approve', requireAdmin, async (req, res) => {
+    const users = await db.loadUsers();
     const user = users.find(u => u.userId === req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.status !== 'pending') {
         return res.status(400).json({ error: 'This account is not awaiting approval.' });
     }
     user.status = 'active';
-    saveUsers(users);
+    await db.saveUsers(users);
 
-    appendAuditLog({
+    await appendAuditLog({
         adminUserId: req.adminUserId,
         action: 'user_approved',
         details: { userId: user.userId, name: user.name, userType: user.userType }
@@ -620,17 +551,17 @@ app.post('/api/admin/users/:userId/approve', requireAdmin, (req, res) => {
     res.json({ user: toPublicUser(user) });
 });
 
-app.post('/api/admin/users/:userId/reject', requireAdmin, (req, res) => {
-    const users = loadUsers();
+app.post('/api/admin/users/:userId/reject', requireAdmin, async (req, res) => {
+    const users = await db.loadUsers();
     const user = users.find(u => u.userId === req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.status !== 'pending') {
         return res.status(400).json({ error: 'This account is not awaiting approval.' });
     }
     user.status = 'rejected';
-    saveUsers(users);
+    await db.saveUsers(users);
 
-    appendAuditLog({
+    await appendAuditLog({
         adminUserId: req.adminUserId,
         action: 'user_rejected',
         details: { userId: user.userId, name: user.name, userType: user.userType }
@@ -648,8 +579,8 @@ app.get('/api/admin/connections', requireAdmin, (req, res) => {
     });
 });
 
-app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
-    const users = loadUsers();
+app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
+    const users = await db.loadUsers();
     const idx = users.findIndex(u => u.userId === req.params.userId);
     if (idx === -1) {
         return res.status(404).json({ error: 'User not found.' });
@@ -659,7 +590,7 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
         return res.status(400).json({ error: 'Admin accounts cannot be removed from this endpoint.' });
     }
     users.splice(idx, 1);
-    saveUsers(users);
+    await db.saveUsers(users);
 
     const online = onlineUsers.get(req.params.userId);
     if (online) {
@@ -671,7 +602,7 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
         onlineUsers.delete(req.params.userId);
     }
 
-    appendAuditLog({
+    await appendAuditLog({
         adminUserId: req.adminUserId,
         action: 'user_removed',
         details: { userId: removed.userId, name: removed.name, userType: removed.userType }
@@ -684,7 +615,7 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
 // Mirrors the validation registration already performs, and never allows
 // userId/userType/passwordHash to be changed through this endpoint.
 async function updateUserDetails(req, res, expectedUserType) {
-    const users = loadUsers();
+    const users = await db.loadUsers();
     const idx = users.findIndex(u => u.userId === req.params.userId && u.userType === expectedUserType);
     if (idx === -1) {
         return res.status(404).json({ error: `${expectedUserType === 'doctor' ? 'Doctor' : 'Drone operator'} not found.` });
@@ -703,7 +634,6 @@ async function updateUserDetails(req, res, expectedUserType) {
     }
 
     const user = users[idx];
-    const before = { ...user };
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (phone !== undefined) user.phone = phone;
@@ -726,10 +656,10 @@ async function updateUserDetails(req, res, expectedUserType) {
         user.passwordHash = await bcrypt.hash(password, 10);
     }
 
-    saveUsers(users);
+    await db.saveUsers(users);
 
     const changedFields = Object.keys(req.body || {}).filter(k => k !== 'password');
-    appendAuditLog({
+    await appendAuditLog({
         adminUserId: req.adminUserId,
         action: 'user_edited',
         details: { userId: user.userId, userType: user.userType, changedFields }
@@ -742,9 +672,9 @@ app.put('/api/doctors/:userId', requireAdmin, async (req, res) => updateUserDeta
 app.put('/api/drones/:userId', requireAdmin, async (req, res) => updateUserDetails(req, res, 'drone_operator'));
 
 // --- Analytics: computed entirely from the persisted emergency log ---
-app.get('/api/admin/analytics', requireAdmin, (req, res) => {
-    const log = loadEmergencyLog();
-    const users = loadUsers();
+app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
+    const log = await db.loadEmergencyLog();
+    const users = await db.loadUsers();
     const userName = (userId) => {
         const u = users.find(x => x.userId === userId);
         return u ? u.name : userId;
@@ -797,9 +727,9 @@ app.get('/api/admin/analytics', requireAdmin, (req, res) => {
 });
 
 // --- Historical emergency request log, filterable for the admin panel ---
-app.get('/api/admin/emergency-log', requireAdmin, (req, res) => {
+app.get('/api/admin/emergency-log', requireAdmin, async (req, res) => {
     const { from, to, doctorId, droneId } = req.query;
-    let log = loadEmergencyLog();
+    let log = await db.loadEmergencyLog();
 
     if (from) {
         const fromMs = new Date(from).getTime();
@@ -817,8 +747,8 @@ app.get('/api/admin/emergency-log', requireAdmin, (req, res) => {
 });
 
 // --- Admin audit trail, most recent first ---
-app.get('/api/admin/audit-log', requireAdmin, (req, res) => {
-    const log = loadAuditLog().sort((a, b) => b.timestamp - a.timestamp);
+app.get('/api/admin/audit-log', requireAdmin, async (req, res) => {
+    const log = (await db.loadAuditLog()).sort((a, b) => b.timestamp - a.timestamp);
     res.json({ log });
 });
 
@@ -870,20 +800,20 @@ io.on('connection', (socket) => {
     });
 
     // --- Handle Connection Reset from Clients ---
-    socket.on('resetConnection', (roomId) => {
+    socket.on('resetConnection', async (roomId) => {
         if (roomId && activeConnections[roomId]) {
             delete activeConnections[roomId];
             // An assigned pairing being reset is how this system represents
             // a completed mission -- log it as such rather than letting the
             // record just vanish from memory.
-            updateEmergencyLogByRoom(roomId, ['assigned'], {
+            await db.updateEmergencyLogByRoom(roomId, ['assigned'], {
                 status: 'completed',
                 resolvedAt: Date.now()
             });
             console.log(`Connection ${roomId} reset by a client.`);
         } else {
             for (const id of Object.keys(activeConnections)) {
-                updateEmergencyLogByRoom(id, ['assigned'], { status: 'completed', resolvedAt: Date.now() });
+                await db.updateEmergencyLogByRoom(id, ['assigned'], { status: 'completed', resolvedAt: Date.now() });
             }
             activeConnections = {};
             console.log('All connections reset by a client.');
@@ -911,7 +841,7 @@ io.on('connection', (socket) => {
 
     // --- Emergency call queue: a drone raises a request, an available ---
     // --- doctor accepts it, rather than doctors self-selecting a call. ---
-    socket.on('requestEmergency', (data = {}) => {
+    socket.on('requestEmergency', async (data = {}) => {
         const roomId = uuidv4();
         const request = {
             roomId,
@@ -926,7 +856,7 @@ io.on('connection', (socket) => {
         // it starts receiving anything sent to it as soon as it's assigned.
         socket.join(roomId);
 
-        appendEmergencyLog({
+        await db.appendEmergencyLog({
             id: uuidv4(),
             roomId,
             droneUserId: request.droneUserId,
@@ -945,15 +875,15 @@ io.on('connection', (socket) => {
         console.log(`New emergency request ${roomId} from ${request.operatorName}`);
     });
 
-    socket.on('cancelEmergencyRequest', (roomId) => {
+    socket.on('cancelEmergencyRequest', async (roomId) => {
         if (pendingRequests[roomId] && pendingRequests[roomId].socketId === socket.id) {
             delete pendingRequests[roomId];
-            updateEmergencyLogByRoom(roomId, ['pending'], { status: 'cancelled', resolvedAt: Date.now() });
+            await db.updateEmergencyLogByRoom(roomId, ['pending'], { status: 'cancelled', resolvedAt: Date.now() });
             io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
         }
     });
 
-    socket.on('acceptRequest', ({ roomId, doctorUserId, doctorName } = {}, callback) => {
+    socket.on('acceptRequest', async ({ roomId, doctorUserId, doctorName } = {}, callback) => {
         const request = pendingRequests[roomId];
         if (!request) {
             if (typeof callback === 'function') {
@@ -974,7 +904,7 @@ io.on('connection', (socket) => {
         activeConnections[roomId] = connection;
         socket.join(roomId);
 
-        updateEmergencyLogByRoom(roomId, ['pending'], {
+        await db.updateEmergencyLogByRoom(roomId, ['pending'], {
             status: 'assigned',
             doctorUserId: doctorUserId || null,
             doctorName: doctorName || doctorUserId || null,
@@ -992,7 +922,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
         console.log(`User disconnected: ${socket.id}`);
 
         if (socket.data.userId) {
@@ -1005,7 +935,7 @@ io.on('connection', (socket) => {
         for (const [roomId, request] of Object.entries(pendingRequests)) {
             if (request.socketId === socket.id) {
                 delete pendingRequests[roomId];
-                updateEmergencyLogByRoom(roomId, ['pending'], { status: 'timed_out', resolvedAt: Date.now() });
+                await db.updateEmergencyLogByRoom(roomId, ['pending'], { status: 'timed_out', resolvedAt: Date.now() });
                 requestsChanged = true;
             }
         }
@@ -1019,10 +949,19 @@ const PORT = process.env.PORT || 8003;
 // Render sets RENDER_EXTERNAL_URL to the service's actual live URL; fall
 // back to the known deployment for local/other environments.
 const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL || 'https://trigun-smart-health-drone.onrender.com';
-// Listen on all network interfaces (0.0.0.0) to be accessible from other devices
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port: ${PORT}`);
-    console.log(`Drone interface: ${PUBLIC_URL}/drone.html`);
-    console.log(`Doctor interface: ${PUBLIC_URL}/doctor.html`);
-    console.log(`Main interface: ${PUBLIC_URL}/`);
-});
+
+db.initSchema()
+    .then(() => {
+        // Listen on all network interfaces (0.0.0.0) to be accessible from other devices
+        server.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port: ${PORT}`);
+            console.log(`Storage: ${db.isPersistent ? 'DATABASE_URL (persists across restarts/redeploys)' : 'local JSON files (NOT persisted across redeploys on platforms with an ephemeral filesystem -- set DATABASE_URL in production)'}`);
+            console.log(`Drone interface: ${PUBLIC_URL}/drone.html`);
+            console.log(`Doctor interface: ${PUBLIC_URL}/doctor.html`);
+            console.log(`Main interface: ${PUBLIC_URL}/`);
+        });
+    })
+    .catch(err => {
+        console.error('Failed to initialize database schema:', err);
+        process.exit(1);
+    });
