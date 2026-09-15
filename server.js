@@ -164,7 +164,7 @@ app.post('/api/register', async (req, res) => {
         res.status(201).json({ user: toPublicUser(newUser), pendingApproval: true });
     } catch (err) {
         console.error('Registration failed:', err);
-        res.status(500).json({ error: 'Registration failed due to a server error. Please try again.' });
+        res.status(500).json({ error: 'Registration failed: ' + err.message });
     }
 });
 
@@ -418,7 +418,7 @@ app.post('/api/admin/setup', async (req, res) => {
         res.status(201).json({ user: toPublicUser(newAdmin) });
     } catch (err) {
         console.error('Admin setup failed:', err);
-        res.status(500).json({ error: 'Setup failed due to a server error. Please try again.' });
+        res.status(500).json({ error: 'Setup failed: ' + err.message });
     }
 });
 
@@ -460,7 +460,7 @@ app.post('/api/admin/login', async (req, res) => {
         res.json({ user: toPublicUser(admin) });
     } catch (err) {
         console.error('Admin login failed:', err);
-        res.status(500).json({ error: 'Login failed due to a server error. Please try again.' });
+        res.status(500).json({ error: 'Login failed: ' + err.message });
     }
 });
 
@@ -506,7 +506,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
         res.status(201).json({ user: toPublicUser(newAdmin) });
     } catch (err) {
         console.error('Admin account creation failed:', err);
-        res.status(500).json({ error: 'Failed to create admin account due to a server error.' });
+        res.status(500).json({ error: 'Failed to create admin account: ' + err.message });
     }
 });
 
