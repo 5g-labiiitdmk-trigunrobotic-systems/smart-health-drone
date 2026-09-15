@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Ambulance Patrol Drone</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
     <style>
         :root {
             --primary: #e63946;
@@ -172,8 +173,122 @@
         }
 
         .error-text { color: var(--danger); margin-top: 10px; text-align: center; }
+        .success-text { color: var(--success); margin-top: 10px; text-align: center; }
         .empty-note { color: var(--accent-text); opacity: 0.8; padding: 10px 0; }
         [hidden] { display: none !important; }
+
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 16px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-text);
+            border-bottom-color: var(--accent-text);
+        }
+
+        .tab-panel[hidden] { display: none !important; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent-text);
+        }
+
+        .stat-card .stat-caption {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            align-items: flex-end;
+        }
+
+        .filter-bar .form-group { margin-bottom: 0; min-width: 150px; }
+        .filter-bar input, .filter-bar select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .modal-box {
+            background: #ffffff;
+            border-radius: 15px;
+            padding: 25px;
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-box h3 {
+            color: var(--accent-text);
+            margin-bottom: 15px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: var(--light);
+        }
 
         /* Tables can have more columns than a phone screen is wide. Below
            768px they reflow into a stack of labeled "cards" (one per row)
@@ -316,16 +431,42 @@
     </style>
 </head>
 <body>
-    <div class="container" id="loginView">
+    <div class="container" id="setupView" hidden>
+        <div class="auth-form">
+            <h2><i class="fas fa-user-shield"></i> Create the First Admin Account</h2>
+            <p style="color: var(--accent-text); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">
+                No admin account exists yet. This one-time setup creates the first one;
+                it will refuse to run again once an admin account exists.
+            </p>
+            <form id="adminSetupForm">
+                <div class="form-group">
+                    <label for="setupName">Full Name</label>
+                    <input type="text" id="setupName" required>
+                </div>
+                <div class="form-group">
+                    <label for="setupUserId">Admin User ID</label>
+                    <input type="text" id="setupUserId" required>
+                </div>
+                <div class="form-group">
+                    <label for="setupEmail">Email</label>
+                    <input type="email" id="setupEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="setupPassword">Password (min 8 characters)</label>
+                    <input type="password" id="setupPassword" minlength="8" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Create Admin Account</button>
+                <p class="error-text" id="setupError" hidden></p>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="loginView" hidden>
         <div class="auth-form">
             <h2><i class="fas fa-user-shield"></i> Admin Login</h2>
-            <p style="color: var(--accent-text); font-size: 0.85rem; margin-bottom: 15px; text-align: center;">
-                Placeholder single-account auth (ADMIN_USERNAME / ADMIN_PASSWORD env vars).
-                Replace with real role-based auth before production use.
-            </p>
             <form id="adminLoginForm">
                 <div class="form-group">
-                    <label for="adminUsername">Username</label>
+                    <label for="adminUsername">Admin User ID</label>
                     <input type="text" id="adminUsername" required>
                 </div>
                 <div class="form-group">
@@ -347,71 +488,291 @@
             </div>
         </div>
         <header>
-            <h1><i class="fas fa-user-shield"></i> Admin Panel</h1>
+            <h1><i class="fas fa-user-shield"></i> Admin Panel <span id="adminWhoAmI" style="font-size: 0.8rem; color: #6b7280; font-weight: 400;"></span></h1>
             <div>
                 <a href="/" class="btn btn-outline">Portal</a>
                 <button class="btn btn-danger" id="logoutBtn">Logout</button>
             </div>
         </header>
 
-        <div class="card">
-            <h2><i class="fas fa-satellite-dish"></i> Active Drone-Doctor Pairings</h2>
-            <div id="connectionsTableWrap">
-                <p class="empty-note">Loading...</p>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="analytics">Analytics</button>
+            <button class="tab-btn" data-tab="history">Emergency History</button>
+            <button class="tab-btn" data-tab="users">Users</button>
+            <button class="tab-btn" data-tab="audit">Audit Trail</button>
+        </div>
+
+        <div class="tab-panel" id="tab-overview">
+            <div class="card">
+                <h2><i class="fas fa-satellite-dish"></i> Active Drone-Doctor Pairings</h2>
+                <div id="connectionsTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-bell"></i> Unassigned Emergency Requests</h2>
+                <div id="pendingTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <h2><i class="fas fa-bell"></i> Unassigned Emergency Requests</h2>
-            <div id="pendingTableWrap">
-                <p class="empty-note">Loading...</p>
+        <div class="tab-panel" id="tab-analytics" hidden>
+            <div class="stat-cards">
+                <div class="stat-card">
+                    <div class="stat-value" id="statTotalCalls">-</div>
+                    <div class="stat-caption">Total Emergency Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statAvgResponse">-</div>
+                    <div class="stat-caption">Avg. Response Time (request &rarr; doctor accepted)</div>
+                </div>
+            </div>
+            <div class="charts-grid">
+                <div class="card">
+                    <h2><i class="fas fa-chart-line"></i> Emergency Calls Over Time</h2>
+                    <canvas id="callsChart" height="220"></canvas>
+                </div>
+                <div class="card">
+                    <h2><i class="fas fa-chart-pie"></i> Doctor Utilization</h2>
+                    <canvas id="doctorChart" height="220"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2><i class="fas fa-chart-bar"></i> Drone Utilization</h2>
+                <canvas id="droneChart" height="180"></canvas>
             </div>
         </div>
 
-        <div class="card">
-            <h2><i class="fas fa-user-md"></i> Registered Doctors</h2>
-            <div id="doctorsTableWrap">
-                <p class="empty-note">Loading...</p>
+        <div class="tab-panel" id="tab-history" hidden>
+            <div class="card">
+                <h2><i class="fas fa-history"></i> Historical Emergency Log</h2>
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>From</label>
+                        <input type="date" id="historyFrom">
+                    </div>
+                    <div class="form-group">
+                        <label>To</label>
+                        <input type="date" id="historyTo">
+                    </div>
+                    <div class="form-group">
+                        <label>Doctor</label>
+                        <select id="historyDoctor"><option value="">All</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Drone Operator</label>
+                        <select id="historyDrone"><option value="">All</option></select>
+                    </div>
+                    <button class="btn" id="historyFilterBtn">Filter</button>
+                    <button class="btn btn-outline" id="historyClearBtn">Clear</button>
+                </div>
+                <div id="historyTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <h2><i class="fas fa-drone"></i> Registered Drone Operators</h2>
-            <div id="dronesTableWrap">
-                <p class="empty-note">Loading...</p>
+        <div class="tab-panel" id="tab-users" hidden>
+            <div class="card">
+                <h2><i class="fas fa-user-md"></i> Registered Doctors</h2>
+                <div id="doctorsTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
             </div>
+
+            <div class="card">
+                <h2><i class="fas fa-drone"></i> Registered Drone Operators</h2>
+                <div id="dronesTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-user-shield"></i> Admin Accounts</h2>
+                <p style="margin-bottom: 12px; font-size: 0.85rem; color: #6b7280;">Only an already-logged-in admin can create another admin account.</p>
+                <button class="btn" id="addAdminBtn">Add Admin Account</button>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-audit" hidden>
+            <div class="card">
+                <h2><i class="fas fa-clipboard-list"></i> Admin Audit Trail</h2>
+                <div id="auditTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="editModalOverlay" hidden>
+        <div class="modal-box">
+            <h3 id="editModalTitle">Edit User</h3>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <input type="hidden" id="editUserType">
+                <div class="form-group">
+                    <label for="editName">Name</label>
+                    <input type="text" id="editName" required>
+                </div>
+                <div class="form-group">
+                    <label for="editEmail">Email</label>
+                    <input type="email" id="editEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="editPhone">Phone</label>
+                    <input type="text" id="editPhone" required>
+                </div>
+                <div id="editDoctorFields" hidden>
+                    <div class="form-group">
+                        <label for="editSpecialization">Specialization</label>
+                        <input type="text" id="editSpecialization">
+                    </div>
+                    <div class="form-group">
+                        <label for="editLicense">License</label>
+                        <input type="text" id="editLicense">
+                    </div>
+                    <div class="form-group">
+                        <label for="editClinic">Clinic</label>
+                        <input type="text" id="editClinic">
+                    </div>
+                </div>
+                <div id="editDroneFields" hidden>
+                    <div class="form-group">
+                        <label for="editCity">City</label>
+                        <input type="text" id="editCity">
+                    </div>
+                    <div class="form-group">
+                        <label for="editVillage">Village</label>
+                        <input type="text" id="editVillage">
+                    </div>
+                    <div class="form-group">
+                        <label for="editState">State</label>
+                        <input type="text" id="editState">
+                    </div>
+                    <div class="form-group">
+                        <label for="editCountry">Country</label>
+                        <input type="text" id="editCountry">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="editPassword">New Password (optional)</label>
+                    <input type="password" id="editPassword" minlength="6">
+                </div>
+                <p class="error-text" id="editError" hidden></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="editCancelBtn">Cancel</button>
+                    <button type="submit" class="btn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="addAdminOverlay" hidden>
+        <div class="modal-box">
+            <h3>Add Admin Account</h3>
+            <form id="addAdminForm">
+                <div class="form-group">
+                    <label for="newAdminName">Name</label>
+                    <input type="text" id="newAdminName" required>
+                </div>
+                <div class="form-group">
+                    <label for="newAdminUserId">User ID</label>
+                    <input type="text" id="newAdminUserId" required>
+                </div>
+                <div class="form-group">
+                    <label for="newAdminEmail">Email</label>
+                    <input type="email" id="newAdminEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="newAdminPassword">Password (min 8 characters)</label>
+                    <input type="password" id="newAdminPassword" minlength="8" required>
+                </div>
+                <p class="error-text" id="addAdminError" hidden></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="addAdminCancelBtn">Cancel</button>
+                    <button type="submit" class="btn">Create</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
+        const setupView = document.getElementById('setupView');
         const loginView = document.getElementById('loginView');
         const dashboardView = document.getElementById('dashboardView');
         const loginError = document.getElementById('loginError');
+        const setupError = document.getElementById('setupError');
 
-        let adminToken = sessionStorage.getItem('adminToken');
+        // Session state now lives in an httpOnly cookie set by the server;
+        // the client holds no token at all, just whether it believes it's
+        // logged in (confirmed against the server via /api/admin/me).
+        let isLoggedIn = false;
+        let currentAdmin = null;
+        let charts = {};
 
         function showDashboard() {
+            setupView.hidden = true;
             loginView.hidden = true;
             dashboardView.hidden = false;
+            document.getElementById('adminWhoAmI').textContent = currentAdmin ? `(${currentAdmin.name})` : '';
             refreshAll();
         }
 
         function showLogin() {
+            setupView.hidden = true;
             loginView.hidden = false;
             dashboardView.hidden = true;
         }
 
+        function showSetup() {
+            setupView.hidden = false;
+            loginView.hidden = true;
+            dashboardView.hidden = true;
+        }
+
+        document.getElementById('adminSetupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            setupError.hidden = true;
+            const body = {
+                name: document.getElementById('setupName').value,
+                userId: document.getElementById('setupUserId').value,
+                email: document.getElementById('setupEmail').value,
+                password: document.getElementById('setupPassword').value
+            };
+            try {
+                const res = await fetch('/api/admin/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    setupError.textContent = data.error || 'Setup failed.';
+                    setupError.hidden = false;
+                    return;
+                }
+                showLogin();
+            } catch (err) {
+                setupError.textContent = 'Could not reach the server.';
+                setupError.hidden = false;
+            }
+        });
+
         document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             loginError.hidden = true;
-            const username = document.getElementById('adminUsername').value;
+            const userId = document.getElementById('adminUsername').value;
             const password = document.getElementById('adminPassword').value;
             try {
                 const res = await fetch('/api/admin/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    credentials: 'include',
+                    body: JSON.stringify({ userId, password })
                 });
                 const data = await res.json();
                 if (!res.ok) {
@@ -419,8 +780,8 @@
                     loginError.hidden = false;
                     return;
                 }
-                adminToken = data.token;
-                sessionStorage.setItem('adminToken', adminToken);
+                isLoggedIn = true;
+                currentAdmin = data.user;
                 showDashboard();
             } catch (err) {
                 loginError.textContent = 'Could not reach the server.';
@@ -430,31 +791,41 @@
 
         document.getElementById('logoutBtn').addEventListener('click', async () => {
             try {
-                await fetch('/api/admin/logout', {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${adminToken}` }
-                });
+                await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
             } catch (err) { /* ignore */ }
-            sessionStorage.removeItem('adminToken');
-            adminToken = null;
+            isLoggedIn = false;
+            currentAdmin = null;
             showLogin();
         });
 
         async function adminFetch(url, options = {}) {
             const res = await fetch(url, {
                 ...options,
-                headers: { ...(options.headers || {}), Authorization: `Bearer ${adminToken}` }
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
             });
             if (res.status === 401) {
-                sessionStorage.removeItem('adminToken');
-                adminToken = null;
+                isLoggedIn = false;
                 showLogin();
                 throw new Error('Session expired. Please log in again.');
             }
             return res;
         }
 
-        function renderUsersTable(container, users, roleLabelFn) {
+        // --- Tabs ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).hidden = false;
+                if (btn.dataset.tab === 'analytics') refreshAnalytics();
+                if (btn.dataset.tab === 'history') refreshHistory();
+                if (btn.dataset.tab === 'audit') refreshAudit();
+            });
+        });
+
+        function renderUsersTable(container, users, roleLabelFn, userType) {
             if (!users.length) {
                 container.innerHTML = '<p class="empty-note">None registered yet.</p>';
                 return;
@@ -466,7 +837,10 @@
                     <td data-label="Detail">${roleLabelFn(u)}</td>
                     <td data-label="Status"><span class="badge ${u.online ? 'badge-online' : 'badge-offline'}">${u.online ? 'Online' : 'Offline'}</span></td>
                     <td data-label="Pairing"><span class="badge ${u.paired ? 'badge-paired' : 'badge-free'}">${u.paired ? 'Paired' : 'Free'}</span></td>
-                    <td data-label="Action"><button class="btn btn-danger" data-remove="${u.userId}">Remove</button></td>
+                    <td data-label="Action">
+                        <button class="btn btn-outline" data-edit="${u.userId}" data-usertype="${userType}" style="margin-right: 6px;">Edit</button>
+                        <button class="btn btn-danger" data-remove="${u.userId}">Remove</button>
+                    </td>
                 </tr>
             `).join('');
             container.innerHTML = `
@@ -477,6 +851,13 @@
             `;
             container.querySelectorAll('[data-remove]').forEach(btn => {
                 btn.addEventListener('click', () => removeUser(btn.getAttribute('data-remove')));
+            });
+            container.querySelectorAll('[data-edit]').forEach(btn => {
+                btn.addEventListener('click', () => openEditModal(
+                    btn.getAttribute('data-edit'),
+                    btn.getAttribute('data-usertype'),
+                    users.find(u => u.userId === btn.getAttribute('data-edit'))
+                ));
             });
         }
 
@@ -495,13 +876,21 @@
             }
         }
 
+        let allUsersCache = [];
+
         async function refreshUsers() {
             const res = await adminFetch('/api/admin/users');
             const { users } = await res.json();
+            allUsersCache = users;
             const doctors = users.filter(u => u.userType === 'doctor');
             const drones = users.filter(u => u.userType === 'drone_operator');
-            renderUsersTable(document.getElementById('doctorsTableWrap'), doctors, u => u.specialization || 'General');
-            renderUsersTable(document.getElementById('dronesTableWrap'), drones, u => [u.city, u.state].filter(Boolean).join(', ') || '-');
+            renderUsersTable(document.getElementById('doctorsTableWrap'), doctors, u => u.specialization || 'General', 'doctor');
+            renderUsersTable(document.getElementById('dronesTableWrap'), drones, u => [u.city, u.state].filter(Boolean).join(', ') || '-', 'drone_operator');
+
+            const doctorSelect = document.getElementById('historyDoctor');
+            const droneSelect = document.getElementById('historyDrone');
+            doctorSelect.innerHTML = '<option value="">All</option>' + doctors.map(d => `<option value="${d.userId}">${d.name}</option>`).join('');
+            droneSelect.innerHTML = '<option value="">All</option>' + drones.map(d => `<option value="${d.userId}">${d.name}</option>`).join('');
         }
 
         async function refreshConnections() {
@@ -548,6 +937,259 @@
             }
         }
 
+        // --- Analytics (real data from the persisted emergency log) ---
+        async function refreshAnalytics() {
+            try {
+                const res = await adminFetch('/api/admin/analytics');
+                const data = await res.json();
+
+                document.getElementById('statTotalCalls').textContent = data.totalCalls;
+                document.getElementById('statAvgResponse').textContent = data.avgResponseTimeMs == null
+                    ? 'No accepted calls yet'
+                    : `${Math.round(data.avgResponseTimeMs / 1000)}s`;
+
+                const callsCtx = document.getElementById('callsChart');
+                if (charts.calls) charts.calls.destroy();
+                charts.calls = new Chart(callsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.callsByDay.map(d => d.date),
+                        datasets: [{
+                            label: 'Emergency Calls',
+                            data: data.callsByDay.map(d => d.count),
+                            borderColor: '#1f7a80',
+                            backgroundColor: 'rgba(31, 122, 128, 0.15)',
+                            tension: 0.3,
+                            fill: true
+                        }]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+                });
+
+                const doctorCtx = document.getElementById('doctorChart');
+                if (charts.doctor) charts.doctor.destroy();
+                charts.doctor = new Chart(doctorCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.doctorUtilization.length ? data.doctorUtilization.map(d => d.name) : ['No data yet'],
+                        datasets: [{
+                            data: data.doctorUtilization.length ? data.doctorUtilization.map(d => d.count) : [1],
+                            backgroundColor: ['#1f7a80', '#a8dadc', '#e9c46a', '#e76f51', '#2a9d8f', '#457b9d']
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+
+                const droneCtx = document.getElementById('droneChart');
+                if (charts.drone) charts.drone.destroy();
+                charts.drone = new Chart(droneCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.droneUtilization.length ? data.droneUtilization.map(d => d.name) : ['No data yet'],
+                        datasets: [{
+                            label: 'Missions',
+                            data: data.droneUtilization.length ? data.droneUtilization.map(d => d.count) : [0],
+                            backgroundColor: '#e63946'
+                        }]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // --- Historical emergency log ---
+        function statusBadgeClass(status) {
+            return { completed: 'badge-online', assigned: 'badge-paired', pending: 'badge-free', cancelled: 'badge-offline', timed_out: 'badge-offline' }[status] || 'badge-free';
+        }
+
+        async function refreshHistory() {
+            const params = new URLSearchParams();
+            const from = document.getElementById('historyFrom').value;
+            const to = document.getElementById('historyTo').value;
+            const doctorId = document.getElementById('historyDoctor').value;
+            const droneId = document.getElementById('historyDrone').value;
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+            if (doctorId) params.set('doctorId', doctorId);
+            if (droneId) params.set('droneId', droneId);
+
+            try {
+                const res = await adminFetch('/api/admin/emergency-log?' + params.toString());
+                const { log } = await res.json();
+                const wrap = document.getElementById('historyTableWrap');
+                if (!log.length) {
+                    wrap.innerHTML = '<p class="empty-note">No emergency requests logged yet.</p>';
+                    return;
+                }
+                const rows = log.map(e => `
+                    <tr>
+                        <td data-label="Requested">${new Date(e.createdAt).toLocaleString()}</td>
+                        <td data-label="Drone Operator">${e.operatorName || '-'}</td>
+                        <td data-label="Doctor">${e.doctorName || '-'}</td>
+                        <td data-label="Status"><span class="badge ${statusBadgeClass(e.status)}">${e.status}</span></td>
+                        <td data-label="Location">${e.location ? `${e.location.lat?.toFixed?.(4) ?? ''}, ${e.location.lng?.toFixed?.(4) ?? ''}` : '-'}</td>
+                    </tr>
+                `).join('');
+                wrap.innerHTML = `
+                    <table>
+                        <thead><tr><th>Requested</th><th>Drone Operator</th><th>Doctor</th><th>Status</th><th>Location</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        document.getElementById('historyFilterBtn').addEventListener('click', refreshHistory);
+        document.getElementById('historyClearBtn').addEventListener('click', () => {
+            document.getElementById('historyFrom').value = '';
+            document.getElementById('historyTo').value = '';
+            document.getElementById('historyDoctor').value = '';
+            document.getElementById('historyDrone').value = '';
+            refreshHistory();
+        });
+
+        // --- Audit trail ---
+        async function refreshAudit() {
+            try {
+                const res = await adminFetch('/api/admin/audit-log');
+                const { log } = await res.json();
+                const wrap = document.getElementById('auditTableWrap');
+                if (!log.length) {
+                    wrap.innerHTML = '<p class="empty-note">No admin actions logged yet.</p>';
+                    return;
+                }
+                const rows = log.map(e => `
+                    <tr>
+                        <td data-label="When">${new Date(e.timestamp).toLocaleString()}</td>
+                        <td data-label="Admin">${e.adminUserId}</td>
+                        <td data-label="Action">${e.action.replace(/_/g, ' ')}</td>
+                        <td data-label="Details">${e.details ? `<code style="font-size: 0.75rem;">${JSON.stringify(e.details)}</code>` : '-'}</td>
+                    </tr>
+                `).join('');
+                wrap.innerHTML = `
+                    <table>
+                        <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // --- Edit user modal ---
+        const editModalOverlay = document.getElementById('editModalOverlay');
+        const editError = document.getElementById('editError');
+
+        function openEditModal(userId, userType, user) {
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUserType').value = userType;
+            document.getElementById('editModalTitle').textContent = `Edit ${userType === 'doctor' ? 'Doctor' : 'Drone Operator'}: ${userId}`;
+            document.getElementById('editName').value = user.name || '';
+            document.getElementById('editEmail').value = user.email || '';
+            document.getElementById('editPhone').value = user.phone || '';
+            document.getElementById('editPassword').value = '';
+            editError.hidden = true;
+
+            const isDoctor = userType === 'doctor';
+            document.getElementById('editDoctorFields').hidden = !isDoctor;
+            document.getElementById('editDroneFields').hidden = isDoctor;
+            if (isDoctor) {
+                document.getElementById('editSpecialization').value = user.specialization || '';
+                document.getElementById('editLicense').value = user.license || '';
+                document.getElementById('editClinic').value = user.clinic || '';
+            } else {
+                document.getElementById('editCity').value = user.city || '';
+                document.getElementById('editVillage').value = user.village || '';
+                document.getElementById('editState').value = user.state || '';
+                document.getElementById('editCountry').value = user.country || '';
+            }
+            editModalOverlay.hidden = false;
+        }
+
+        document.getElementById('editCancelBtn').addEventListener('click', () => { editModalOverlay.hidden = true; });
+
+        document.getElementById('editUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            editError.hidden = true;
+            const userId = document.getElementById('editUserId').value;
+            const userType = document.getElementById('editUserType').value;
+            const body = {
+                name: document.getElementById('editName').value,
+                email: document.getElementById('editEmail').value,
+                phone: document.getElementById('editPhone').value
+            };
+            if (userType === 'doctor') {
+                body.specialization = document.getElementById('editSpecialization').value;
+                body.license = document.getElementById('editLicense').value;
+                body.clinic = document.getElementById('editClinic').value;
+            } else {
+                body.city = document.getElementById('editCity').value;
+                body.village = document.getElementById('editVillage').value;
+                body.state = document.getElementById('editState').value;
+                body.country = document.getElementById('editCountry').value;
+            }
+            const password = document.getElementById('editPassword').value;
+            if (password) body.password = password;
+
+            const endpoint = userType === 'doctor' ? '/api/doctors/' : '/api/drones/';
+            try {
+                const res = await adminFetch(endpoint + encodeURIComponent(userId), {
+                    method: 'PUT',
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    editError.textContent = data.error || 'Failed to save changes.';
+                    editError.hidden = false;
+                    return;
+                }
+                editModalOverlay.hidden = true;
+                refreshUsers();
+            } catch (err) {
+                editError.textContent = err.message;
+                editError.hidden = false;
+            }
+        });
+
+        // --- Add admin modal ---
+        const addAdminOverlay = document.getElementById('addAdminOverlay');
+        const addAdminError = document.getElementById('addAdminError');
+        document.getElementById('addAdminBtn').addEventListener('click', () => {
+            document.getElementById('addAdminForm').reset();
+            addAdminError.hidden = true;
+            addAdminOverlay.hidden = false;
+        });
+        document.getElementById('addAdminCancelBtn').addEventListener('click', () => { addAdminOverlay.hidden = true; });
+        document.getElementById('addAdminForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            addAdminError.hidden = true;
+            const body = {
+                name: document.getElementById('newAdminName').value,
+                userId: document.getElementById('newAdminUserId').value,
+                email: document.getElementById('newAdminEmail').value,
+                password: document.getElementById('newAdminPassword').value
+            };
+            try {
+                const res = await adminFetch('/api/admin/users', { method: 'POST', body: JSON.stringify(body) });
+                const data = await res.json();
+                if (!res.ok) {
+                    addAdminError.textContent = data.error || 'Failed to create admin account.';
+                    addAdminError.hidden = false;
+                    return;
+                }
+                addAdminOverlay.hidden = true;
+                alert(`Admin account "${data.user.userId}" created.`);
+            } catch (err) {
+                addAdminError.textContent = err.message;
+                addAdminError.hidden = false;
+            }
+        });
+
         async function refreshAll() {
             try {
                 await Promise.all([refreshUsers(), refreshConnections()]);
@@ -559,15 +1201,37 @@
         // Live-ish updates: refresh on relevant socket events instead of
         // blind polling, plus a slow periodic refresh as a safety net.
         const socket = io();
-        socket.on('currentConnectionStatus', () => { if (adminToken) refreshConnections(); });
-        socket.on('pendingRequestsUpdated', () => { if (adminToken) refreshConnections(); });
-        setInterval(() => { if (adminToken) refreshAll(); }, 15000);
+        socket.on('currentConnectionStatus', () => { if (isLoggedIn) refreshConnections(); });
+        socket.on('pendingRequestsUpdated', () => { if (isLoggedIn) refreshConnections(); });
+        setInterval(() => { if (isLoggedIn) refreshAll(); }, 15000);
 
-        if (adminToken) {
-            showDashboard();
-        } else {
-            showLogin();
-        }
+        // Bootstrap: figure out whether to show setup, login, or the
+        // dashboard (if a valid session cookie already exists).
+        (async () => {
+            try {
+                const meRes = await fetch('/api/admin/me', { credentials: 'include' });
+                if (meRes.ok) {
+                    const data = await meRes.json();
+                    isLoggedIn = true;
+                    currentAdmin = data.user;
+                    document.getElementById('adminWhoAmI').textContent = `(${data.user.name})`;
+                    showDashboard();
+                    return;
+                }
+            } catch (err) { /* fall through to setup/login check */ }
+
+            try {
+                const statusRes = await fetch('/api/admin/setup-status');
+                const status = await statusRes.json();
+                if (status.setupRequired) {
+                    showSetup();
+                } else {
+                    showLogin();
+                }
+            } catch (err) {
+                showLogin();
+            }
+        })();
     </script>
 </body>
 </html>
