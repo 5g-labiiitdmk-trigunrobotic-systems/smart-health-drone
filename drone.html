@@ -4,6 +4,26 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Ambulance Drone Simulator - IIITDM Kurnool</title>
+<script>
+    // Hide the page until the session check below confirms this is a
+    // logged-in drone operator, so an unauthenticated visitor never sees
+    // a flash of the drone panel before being redirected away.
+    document.documentElement.style.visibility = 'hidden';
+    (async function requireDroneOperatorSession() {
+        try {
+            const res = await fetch('/api/me', { credentials: 'include' });
+            if (!res.ok) { window.location.href = '/'; return; }
+            const data = await res.json();
+            if (data.user.userType !== 'drone_operator') { window.location.href = '/'; return; }
+            localStorage.setItem('myUserId', data.user.userId);
+            localStorage.setItem('myRole', data.user.userType);
+            localStorage.setItem('myName', data.user.name);
+            document.documentElement.style.visibility = 'visible';
+        } catch (err) {
+            window.location.href = '/';
+        }
+    })();
+</script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
 <style>
@@ -1257,6 +1277,9 @@
 <!-- Video Call Button -->
 <button class="btn btn-primary" id="start-video-call">
 <i class="fas fa-video"></i> Video Call Doctor
+</button>
+<button class="btn btn-danger" id="logoutBtn">
+<i class="fas fa-sign-out-alt"></i> Logout
 </button>
 </div>
 </header>
@@ -2701,6 +2724,16 @@
             endVideoCall();
         }, { passive: false });
         window.addEventListener('beforeunload', endVideoCall);
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            } catch (err) { /* ignore */ }
+            localStorage.removeItem('myUserId');
+            localStorage.removeItem('myRole');
+            localStorage.removeItem('myName');
+            window.location.href = '/';
+        });
 
         // Emergency call: raises a real request in the server's queue (so an
         // available doctor can Accept it from the doctor panel), and also

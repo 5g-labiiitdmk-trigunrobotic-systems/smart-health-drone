@@ -18,6 +18,11 @@ const { queryOverpass } = require('./overpass');
 // that survive restarts.
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || uuidv4() + uuidv4();
 
+// Session cookie for regular (doctor/drone-operator) logins -- separate
+// from the admin panel's own admin_session cookie, though both are
+// signed with the same secret.
+const USER_COOKIE = 'user_session';
+
 const app = express();
 const server = http.createServer(app);
 
@@ -181,6 +186,11 @@ app.post('/api/register', async (req, res) => {
 
     const newUser = {
         name, userId, email, phone, userType, passwordHash,
+        // New doctor/drone-operator accounts require admin approval before
+        // they can log in; admin accounts (created through their own
+        // setup/create-admin endpoints) are never routed through here and
+        // remain immediately active.
+        status: 'pending',
         skills: [],
         workDetails: '',
         metrics: {
@@ -207,7 +217,11 @@ app.post('/api/register', async (req, res) => {
     users.push(newUser);
     saveUsers(users);
 
-    res.status(201).json({ user: toPublicUser(newUser) });
+    // Let any connected admin panel show a live "new registration" badge
+    // without needing to refresh or poll.
+    io.emit('newRegistrationPending', toPublicUser(newUser));
+
+    res.status(201).json({ user: toPublicUser(newUser), pendingApproval: true });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -227,7 +241,47 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid User ID or password.' });
     }
 
+    // Pending/rejected accounts never receive a session, even with the
+    // right password.
+    if (user.status === 'pending') {
+        return res.status(403).json({ error: 'Your account is still pending admin approval.' });
+    }
+    if (user.status === 'rejected') {
+        return res.status(403).json({ error: 'Your registration was not approved.' });
+    }
+
+    const token = jwt.sign({ userId: user.userId, role: user.userType }, ADMIN_JWT_SECRET, { expiresIn: '12h' });
+    res.cookie(USER_COOKIE, token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+        maxAge: 12 * 60 * 60 * 1000
+    });
+
     res.json({ user: toPublicUser(user) });
+});
+
+app.post('/api/logout', (req, res) => {
+    res.clearCookie(USER_COOKIE);
+    res.json({ success: true });
+});
+
+// Lets doctor.html/drone.html/index.html confirm an existing session
+// (e.g. after a page reload) without resending credentials.
+app.get('/api/me', (req, res) => {
+    const token = req.cookies && req.cookies[USER_COOKIE];
+    if (!token) return res.status(401).json({ error: 'Not logged in.' });
+    try {
+        const payload = jwt.verify(token, ADMIN_JWT_SECRET);
+        const users = loadUsers();
+        const user = users.find(u => u.userId === payload.userId);
+        if (!user || user.status === 'rejected') {
+            return res.status(401).json({ error: 'Session no longer valid.' });
+        }
+        res.json({ user: toPublicUser(user) });
+    } catch (err) {
+        return res.status(401).json({ error: 'Session expired or invalid.' });
+    }
 });
 
 // List registered users (public fields only) so the UI can show real
@@ -397,7 +451,7 @@ app.post('/api/admin/setup', async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, createdAt: Date.now() };
+    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
     users.push(newAdmin);
     saveUsers(users);
 
@@ -475,7 +529,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, createdAt: Date.now() };
+    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
     users.push(newAdmin);
     saveUsers(users);
 
@@ -500,6 +554,52 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
         };
     });
     res.json({ users });
+});
+
+// Accounts awaiting admin approval before they can log in.
+app.get('/api/admin/pending-users', requireAdmin, (req, res) => {
+    const users = loadUsers()
+        .filter(u => u.status === 'pending')
+        .map(toPublicUser);
+    res.json({ users });
+});
+
+app.post('/api/admin/users/:userId/approve', requireAdmin, (req, res) => {
+    const users = loadUsers();
+    const user = users.find(u => u.userId === req.params.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (user.status !== 'pending') {
+        return res.status(400).json({ error: 'This account is not awaiting approval.' });
+    }
+    user.status = 'active';
+    saveUsers(users);
+
+    appendAuditLog({
+        adminUserId: req.adminUserId,
+        action: 'user_approved',
+        details: { userId: user.userId, name: user.name, userType: user.userType }
+    });
+
+    res.json({ user: toPublicUser(user) });
+});
+
+app.post('/api/admin/users/:userId/reject', requireAdmin, (req, res) => {
+    const users = loadUsers();
+    const user = users.find(u => u.userId === req.params.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (user.status !== 'pending') {
+        return res.status(400).json({ error: 'This account is not awaiting approval.' });
+    }
+    user.status = 'rejected';
+    saveUsers(users);
+
+    appendAuditLog({
+        adminUserId: req.adminUserId,
+        action: 'user_rejected',
+        details: { userId: user.userId, name: user.name, userType: user.userType }
+    });
+
+    res.json({ user: toPublicUser(user) });
 });
 
 // Active drone/doctor pairings and unassigned emergency requests, for the
