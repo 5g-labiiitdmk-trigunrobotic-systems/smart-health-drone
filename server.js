@@ -293,6 +293,29 @@ app.get('/api/me', (req, res) => {
     }
 });
 
+app.post('/api/logout', (req, res) => {
+    res.clearCookie(USER_COOKIE);
+    res.json({ success: true });
+});
+
+// Lets doctor.html/drone.html/index.html confirm an existing session
+// (e.g. after a page reload) without resending credentials.
+app.get('/api/me', (req, res) => {
+    const token = req.cookies && req.cookies[USER_COOKIE];
+    if (!token) return res.status(401).json({ error: 'Not logged in.' });
+    try {
+        const payload = jwt.verify(token, ADMIN_JWT_SECRET);
+        const users = loadUsers();
+        const user = users.find(u => u.userId === payload.userId);
+        if (!user || user.status === 'rejected') {
+            return res.status(401).json({ error: 'Session no longer valid.' });
+        }
+        res.json({ user: toPublicUser(user) });
+    } catch (err) {
+        return res.status(401).json({ error: 'Session expired or invalid.' });
+    }
+});
+
 // List registered users (public fields only) so the UI can show real
 // doctors/drone operators instead of a hardcoded list.
 app.get('/api/users', (req, res) => {
