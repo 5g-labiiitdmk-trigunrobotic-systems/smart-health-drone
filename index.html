@@ -331,47 +331,6 @@
             line-height: 1.4;
         }
 
-        .stats-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 15px;
-            padding: 20px 25px;
-            margin-bottom: 40px;
-            flex-wrap: wrap;
-        }
-
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .stat-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: #dcf1ec;
-            color: var(--accent-text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .stat-number {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--iiit-blue);
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: #6b7280;
-        }
-
         .services-grid {
             display: grid;
             grid-template-columns: 1.6fr 1fr 1fr;
@@ -807,11 +766,6 @@
                 width: 100%;
             }
 
-            .stats-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
             .form-actions {
                 flex-wrap: wrap;
                 gap: 10px;
@@ -1011,25 +965,6 @@
                     <h2>Admin Panel</h2>
                     <p>Manage drones, doctors, missions and system data. Monitor real-time operations and maintain the platform.</p>
                     <button class="card-btn">Access Admin Panel <i class="fas fa-arrow-right"></i></button>
-                </div>
-            </div>
-
-            <div class="stats-row">
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-drone"></i></div>
-                    <div><div class="stat-number">12</div><div class="stat-label">Registered Drones</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-user-md"></i></div>
-                    <div><div class="stat-number">36</div><div class="stat-label">Registered Doctors</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
-                    <div><div class="stat-number">~3 mins</div><div class="stat-label">Average Response Time</div></div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
-                    <div><div class="stat-number">100%</div><div class="stat-label">Commitment to Safer Communities</div></div>
                 </div>
             </div>
 
