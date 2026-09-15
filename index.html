@@ -1659,15 +1659,33 @@
                     return;
                 }
 
-                const userId = document.getElementById('authGateUserId').value;
+                const userId = document.getElementById('authGateUserId').value.trim();
                 const password = document.getElementById('authGatePassword').value;
+
+                // Give clear feedback while the request is in flight --
+                // without this, a slow response (e.g. a free-tier database
+                // waking up from being idle, which can take several
+                // seconds) makes the button look like it did nothing at
+                // all, which is confusing.
+                const submitBtn = document.getElementById('authGateSubmitBtn');
+                const submitLabelEl = document.getElementById('authGateSubmitLabel');
+                const originalLabel = submitLabelEl.textContent;
+                submitBtn.disabled = true;
+                submitLabelEl.textContent = 'Signing in...';
+
+                // A request that hangs (e.g. a database still waking up)
+                // should fail clearly after a while instead of leaving the
+                // button stuck on "Signing in..." forever.
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000);
 
                 try {
                     const res = await fetch('/api/login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ userId, password })
+                        body: JSON.stringify({ userId, password }),
+                        signal: controller.signal
                     });
                     const data = await res.json();
                     if (!res.ok) {
@@ -1683,9 +1701,15 @@
                     }
                     onLoginSuccess(data.user);
                 } catch (err) {
-                    statusMsg.textContent = 'Could not reach the server. Please try again.';
+                    statusMsg.textContent = err.name === 'AbortError'
+                        ? 'The server is taking too long to respond (it may be waking up from being idle). Please wait a moment and try again.'
+                        : 'Could not reach the server. Please try again.';
                     statusMsg.className = 'auth-gate-status-msg error';
                     statusMsg.hidden = false;
+                } finally {
+                    clearTimeout(timeoutId);
+                    submitBtn.disabled = false;
+                    submitLabelEl.textContent = originalLabel;
                 }
             });
         }
