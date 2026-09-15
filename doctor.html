@@ -64,53 +64,69 @@
             color: var(--hospital-text);
         }
 
-        .logo-brand-imgs {
+        .header-brands {
             display: flex;
             align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
-        .logo-brand-imgs img {
+        .brand-block {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-logo-img {
             height: 60px;
             width: 60px;
             object-fit: contain;
+            flex-shrink: 0;
         }
 
-        .logo-brand-divider {
-            width: 1px;
-            height: 40px;
-            background: #d9dee5;
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
         }
 
-        .logo-text {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--accent-text);
-        }
-        .logo-line-1{
-            font-size: 1.05rem;
+        .brand-name {
+            font-size: 0.92rem;
             font-weight: 700;
             color: var(--iiit-blue);
+            white-space: nowrap;
+        }
+
+        .brand-subtitle {
+            font-size: 0.62rem;
+            color: #6b7280;
+            max-width: 200px;
+        }
+
+        .brand-subtitle-teal {
+            color: var(--accent-text);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .brand-divider {
+            width: 1px;
+            align-self: stretch;
+            background: #d9dee5;
         }
 
         .logo-line-2{
             font-size: 1.1rem;
             font-weight: 700;
             color: var(--iiit-blue);
-             margin: 2px 0;
+             margin: 4px 0 2px;
         }
         .logo-line-3 {
              font-size: 0.75rem;
              color: #6b7280;
              font-weight: 400;
              letter-spacing: normal;
-        }
-
-        .logo-line-1-sub {
-             font-size: 0.75rem;
-             color: #6b7280;
-             font-weight: 400;
         }
         .main-container {
             display: flex;
@@ -393,17 +409,27 @@
 <body>
     <header>
         <div class="logo">
-            <div class="logo-brand-imgs">
-                <img src="/assets/logos/iiitdm-logo.jpeg" alt="IIITDM Kurnool logo">
-                <div class="logo-brand-divider"></div>
-                <img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo">
-            </div>
-            <div class="logo-text">
-                <div class="logo-line-1">Indian Institute of Information Technology, Design and Manufacturing, Kurnool</div>
-                <div class="logo-line-1-sub">5G Labs, Trigun Robotics System Pvt Ltd</div>
+            <div>
+                <div class="header-brands">
+                    <div class="brand-block">
+                        <img src="/assets/logos/iiitdm-logo.jpeg" alt="IIITDM Kurnool logo" class="brand-logo-img">
+                        <div class="brand-text">
+                            <div class="brand-name">IIITDM KURNOOL</div>
+                            <div class="brand-subtitle">Indian Institute of Information Technology, Design and Manufacturing, Kurnool</div>
+                        </div>
+                    </div>
+                    <div class="brand-divider"></div>
+                    <div class="brand-block">
+                        <img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo" class="brand-logo-img">
+                        <div class="brand-text">
+                            <div class="brand-name">Trigun Robotic Systems</div>
+                            <div class="brand-subtitle brand-subtitle-teal">Autonomous Solutions for a Safer Tomorrow</div>
+                        </div>
+                    </div>
+                </div>
                 <div class="logo-line-2" id="doctor-header-name">Doctor Interface</div>
                 <div class="logo-line-3">Design and Developed by Dr.K.Krishna Naik,Dr.M.Ravi Kumar, G.Kashifa Anjum and Husenabasha S </div>
-        </div>
+            </div>
         </div>
         <div class="header-controls">
             <div class="simulation-time">
