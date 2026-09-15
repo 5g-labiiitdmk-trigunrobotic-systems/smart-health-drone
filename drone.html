@@ -105,6 +105,25 @@
             color: var(--primary);
             animation: pulse 2s infinite;
         }
+
+        .logo-brand-imgs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .logo-brand-imgs img {
+            height: 44px;
+            width: 44px;
+            object-fit: contain;
+        }
+
+        .logo-brand-divider {
+            width: 1px;
+            height: 40px;
+            background: #d9dee5;
+        }
         
         .logo-text {
             display: flex;
@@ -1166,7 +1185,11 @@
 <div class="container">
 <header>
 <div class="logo">
-<i class="fas fa-ambulance logo-icon"></i>
+<div class="logo-brand-imgs">
+<img src="/assets/logos/iiitdm-logo.jpeg" alt="IIITDM Kurnool logo">
+<div class="logo-brand-divider"></div>
+<img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo">
+</div>
 <div class="logo-text">
 <div class="logo-line-1">Indian Institute of Information Technology, Design and Manufacturing, Kurnool</div>
 <div class="logo-line-1-sub">5G Labs, Trigun Robotics System Pvt Ltd</div>

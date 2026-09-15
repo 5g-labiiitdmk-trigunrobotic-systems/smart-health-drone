@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ambulance Patrol Drone - IIITDM Kurnool</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #e63946;
@@ -26,7 +29,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         body {
@@ -68,8 +71,12 @@
         }
 
         .brand-logo-img {
-            height: 52px;
-            width: 52px;
+            /* Measured logo bbox is 83px tall in the 1372px-wide reference
+               (~73px scaled to this page's 1200px container width) -
+               kept a bit smaller here since the surrounding brand text
+               wasn't rescaled to match. */
+            height: 44px;
+            width: 44px;
             object-fit: contain;
             flex-shrink: 0;
         }
@@ -81,6 +88,7 @@
         }
 
         .brand-name {
+            font-family: 'Poppins', 'Inter', sans-serif;
             font-size: 1.05rem;
             font-weight: 700;
             color: var(--iiit-blue);
@@ -171,7 +179,7 @@
         }
 
         .hero-content {
-            flex: 1 1 420px;
+            flex: 2.4 1 480px;
             min-width: 0;
         }
 
@@ -184,17 +192,26 @@
         }
 
         .hero-title {
-            font-size: 4rem;
+            font-family: 'Poppins', 'Inter', sans-serif;
+            /* Measured directly from the reference image: DRUVA's glyph
+               cap-height is 83px in a 1372px-wide screenshot, giving a
+               font-size of ~115px there; scaled to this page's 1200px
+               container width that is ~101px (6.3rem). */
+            font-size: 6.3rem;
             font-weight: 800;
-            color: var(--iiit-blue);
+            color: #0C2543;
             line-height: 1;
             margin-bottom: 10px;
         }
 
         .hero-subtitle {
-            font-size: 1.4rem;
+            font-family: 'Poppins', 'Inter', sans-serif;
+            /* Measured: ~24px cap-height in the 1372px reference -> ~33px
+               font-size there -> ~29px (1.8rem) scaled to this page's
+               1200px container width. */
+            font-size: 1.8rem;
             font-weight: 600;
-            color: var(--accent-text);
+            color: #0B5264;
             margin-bottom: 18px;
         }
 
@@ -209,22 +226,35 @@
         .hero-features {
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 12px;
         }
 
         .hero-feature-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 0.85rem;
+            gap: 8px;
+            font-size: 0.78rem;
             font-weight: 600;
             color: var(--iiit-blue);
+        }
+
+        /* Prevent each label from wrapping only once there's enough room
+           for all 4 items on one row (matching the reference); on narrow
+           viewports items should wrap normally instead of forcing overflow. */
+        @media (min-width: 1300px) {
+            .hero-feature-item {
+                white-space: nowrap;
+            }
         }
 
         .hero-feature-icon {
             display: flex;
             align-items: center;
             justify-content: center;
+            /* Measured circle diameter is 49px in the 1372px-wide
+               reference (~43px scaled to this page's 1200px container
+               width); kept close to that while still fitting all 4 items
+               on one row within this column's width. */
             width: 38px;
             height: 38px;
             border-radius: 50%;
@@ -234,45 +264,48 @@
         }
 
         .hero-image-wrap {
-            flex: 1 1 380px;
+            flex: 1 1 300px;
             min-width: 0;
             position: relative;
-            height: 340px;
+            /* Measured directly from the reference: photo region is
+               ~679x469px in the 1372px-wide screenshot, an aspect ratio
+               of ~1.45:1. */
+            aspect-ratio: 679 / 469;
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         .hero-drone-img {
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: contain;
-            /* Fades the photo's edges to transparent so it blends into the
-               hero section's own gradient background instead of sitting in
-               a hard-edged box. */
-            -webkit-mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, #000 55%, transparent 100%);
-            mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, #000 55%, transparent 100%);
+            object-fit: cover;
         }
 
-        /* Soft diagonal light accent in the corner, echoing the reference
-           design's geometric overlay shape. */
+        /* Diagonal light wedge accent hugging the top-right corner of the
+           photo, echoing the reference design's geometric overlay shape -
+           the caption text sits inside this lighter triangular patch so it
+           stays legible regardless of the photo underneath. */
         .hero-image-wrap::after {
             content: '';
             position: absolute;
+            top: 0;
             right: 0;
-            bottom: 0;
-            width: 50%;
-            height: 50%;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 55%, rgba(255, 255, 255, 0.85) 100%);
-            clip-path: polygon(100% 0, 100% 100%, 0 100%);
+            width: 72%;
+            height: 78%;
+            background: linear-gradient(200deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.65) 55%, rgba(255, 255, 255, 0) 85%);
+            clip-path: polygon(28% 0, 100% 0, 100% 100%, 55% 100%);
             pointer-events: none;
         }
 
         .hero-image-overlay {
             position: absolute;
-            top: 10%;
-            right: 0;
+            top: 18px;
+            right: 20px;
             text-align: right;
             color: var(--iiit-blue);
-            max-width: 170px;
+            max-width: 160px;
+            z-index: 1;
         }
 
         .hero-overlay-caption {
@@ -295,6 +328,47 @@
             font-weight: 600;
             color: #4a5568;
             line-height: 1.4;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 20px 25px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #dcf1ec;
+            color: var(--accent-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stat-number {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--iiit-blue);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #6b7280;
         }
 
         .services-grid {
@@ -672,6 +746,14 @@
 
             .hero-section {
                 flex-direction: column;
+                /* align-items:center governs the vertical axis in the
+                   desktop row layout (harmless), but once flex-direction
+                   flips to column here it governs the HORIZONTAL axis
+                   instead - centering children at their own content width
+                   rather than stretching them full-width, letting the
+                   large hero text/image overflow the viewport. */
+                align-items: stretch;
+                flex-wrap: nowrap;
                 padding: 30px 20px;
             }
 
@@ -691,6 +773,7 @@
 
             .hero-image-wrap {
                 height: 220px;
+                aspect-ratio: auto;
             }
 
             .nav-menu {
@@ -721,6 +804,11 @@
 
             .mini-map {
                 width: 100%;
+            }
+
+            .stats-row {
+                flex-direction: column;
+                align-items: flex-start;
             }
 
             .form-actions {
@@ -922,6 +1010,25 @@
                     <h2>Admin Panel</h2>
                     <p>Manage drones, doctors, missions and system data. Monitor real-time operations and maintain the platform.</p>
                     <button class="card-btn">Access Admin Panel <i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-icon"><i class="fas fa-drone"></i></div>
+                    <div><div class="stat-number">12</div><div class="stat-label">Registered Drones</div></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon"><i class="fas fa-user-md"></i></div>
+                    <div><div class="stat-number">36</div><div class="stat-label">Registered Doctors</div></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                    <div><div class="stat-number">~3 mins</div><div class="stat-label">Average Response Time</div></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div><div class="stat-number">100%</div><div class="stat-label">Commitment to Safer Communities</div></div>
                 </div>
             </div>
 
