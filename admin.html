@@ -55,6 +55,32 @@
             color: var(--accent-text);
         }
 
+        .logo-brand-imgs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .logo-brand-imgs img {
+            height: 44px;
+            width: 44px;
+            object-fit: contain;
+        }
+
+        .logo-brand-divider {
+            width: 1px;
+            height: 40px;
+            background: #d9dee5;
+        }
+
+        .admin-brand-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0 0;
+        }
+
         .btn {
             display: inline-block;
             padding: 8px 18px;
@@ -313,6 +339,13 @@
     </div>
 
     <div class="container" id="dashboardView" hidden>
+        <div class="admin-brand-row">
+            <div class="logo-brand-imgs">
+                <img src="/assets/logos/iiitdm-logo.jpeg" alt="IIITDM Kurnool logo">
+                <div class="logo-brand-divider"></div>
+                <img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo">
+            </div>
+        </div>
         <header>
             <h1><i class="fas fa-user-shield"></i> Admin Panel</h1>
             <div>
