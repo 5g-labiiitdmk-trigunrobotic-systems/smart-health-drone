@@ -1117,6 +1117,16 @@
                 font-size: 0.7rem;
             }
 
+            /* #end-call-btn's inline style (padding:2px 10px, 0.8rem) is
+               far below the 44x44px minimum touch target -- fine with a
+               mouse pointer, unreliable to tap on a phone. */
+            #end-call-btn {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 10px 16px;
+                font-size: 0.85rem;
+            }
+
             header {
                 flex-direction: column;
                 align-items: flex-start;
@@ -2680,7 +2690,16 @@
             addLogEntry('Video call ended.', 'info');
         }
 
-        document.getElementById('end-call-btn').addEventListener('click', endVideoCall);
+        // touchend fallback (with preventDefault, so the browser doesn't
+        // also fire a synthesized click and run endVideoCall twice) guards
+        // against any ancestor's touch handling ever swallowing the tap --
+        // notably the video-call-header's own drag handler above.
+        const endCallBtn = document.getElementById('end-call-btn');
+        endCallBtn.addEventListener('click', endVideoCall);
+        endCallBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            endVideoCall();
+        }, { passive: false });
         window.addEventListener('beforeunload', endVideoCall);
 
         // Emergency call: raises a real request in the server's queue (so an
@@ -2794,6 +2813,14 @@
         }
 
         function startDrag(e) {
+            // Don't hijack taps on interactive controls inside the header
+            // (e.g. the End Call button) into a drag -- preventDefault()
+            // below would otherwise swallow the touch and stop the
+            // button's click event from ever firing on mobile.
+            if (e.target.closest('button, a, input')) {
+                return;
+            }
+
             isDragging = true;
             const coords = getEventCoords(e);
             const rect = videoCallContainerElement.getBoundingClientRect(); // Use the container element
@@ -2801,10 +2828,10 @@
             offsetY = coords.clientY - rect.top;
             videoCallContainerElement.style.cursor = 'grabbing';
             videoCallContainerElement.style.transition = 'none'; // Disable transition during drag
-            
+
             // Prevent default touch actions only if it's a drag start
             if (e.type === 'touchstart') {
-                e.preventDefault(); 
+                e.preventDefault();
             }
         }
 
