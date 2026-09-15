@@ -864,6 +864,14 @@
             flex-wrap: wrap;
         }
 
+        /* The ID selector above beats the browser's default [hidden] {
+           display: none } rule in specificity, so setting .hidden = true
+           in JS silently did nothing and the login screen stayed visible
+           on top of the logged-in dashboard. Force it back off here. */
+        #authGateView[hidden] {
+            display: none;
+        }
+
         .auth-gate-visual {
             flex: 1 1 480px;
             min-width: 320px;
