@@ -225,40 +225,72 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-    const { userId, password } = req.body || {};
-    if (!userId || !password) {
-        return res.status(400).json({ error: 'User ID and password are required.' });
-    }
+    try {
+        const { userId, password } = req.body || {};
+        if (!userId || !password) {
+            return res.status(400).json({ error: 'User ID and password are required.' });
+        }
 
-    const users = loadUsers();
-    const user = users.find(u => u.userId === userId);
-    if (!user) {
-        return res.status(401).json({ error: 'Invalid User ID or password.' });
-    }
+        const users = loadUsers();
+        const user = users.find(u => u.userId === userId);
+        // A missing/corrupted passwordHash (e.g. a record from before
+        // hashing was introduced, or written by an older code path) would
+        // make bcrypt.compare() throw synchronously -- treat it the same
+        // as "no such user" instead of crashing the request.
+        if (!user || !user.passwordHash) {
+            return res.status(401).json({ error: 'Invalid User ID or password.' });
+        }
 
-    const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) {
-        return res.status(401).json({ error: 'Invalid User ID or password.' });
-    }
+        const match = await bcrypt.compare(password, user.passwordHash);
+        if (!match) {
+            return res.status(401).json({ error: 'Invalid User ID or password.' });
+        }
 
-    // Pending/rejected accounts never receive a session, even with the
-    // right password.
-    if (user.status === 'pending') {
-        return res.status(403).json({ error: 'Your account is still pending admin approval.' });
-    }
-    if (user.status === 'rejected') {
-        return res.status(403).json({ error: 'Your registration was not approved.' });
-    }
+        // Pending/rejected accounts never receive a session, even with the
+        // right password.
+        if (user.status === 'pending') {
+            return res.status(403).json({ error: 'Your account is still pending admin approval.' });
+        }
+        if (user.status === 'rejected') {
+            return res.status(403).json({ error: 'Your registration was not approved.' });
+        }
 
-    const token = jwt.sign({ userId: user.userId, role: user.userType }, ADMIN_JWT_SECRET, { expiresIn: '12h' });
-    res.cookie(USER_COOKIE, token, {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
-        maxAge: 12 * 60 * 60 * 1000
-    });
+        const token = jwt.sign({ userId: user.userId, role: user.userType }, ADMIN_JWT_SECRET, { expiresIn: '12h' });
+        res.cookie(USER_COOKIE, token, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+            maxAge: 12 * 60 * 60 * 1000
+        });
 
-    res.json({ user: toPublicUser(user) });
+        res.json({ user: toPublicUser(user) });
+    } catch (err) {
+        console.error('Login failed:', err);
+        res.status(500).json({ error: 'Login failed due to a server error. Please try again.' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    res.clearCookie(USER_COOKIE);
+    res.json({ success: true });
+});
+
+// Lets doctor.html/drone.html/index.html confirm an existing session
+// (e.g. after a page reload) without resending credentials.
+app.get('/api/me', (req, res) => {
+    const token = req.cookies && req.cookies[USER_COOKIE];
+    if (!token) return res.status(401).json({ error: 'Not logged in.' });
+    try {
+        const payload = jwt.verify(token, ADMIN_JWT_SECRET);
+        const users = loadUsers();
+        const user = users.find(u => u.userId === payload.userId);
+        if (!user || user.status === 'rejected') {
+            return res.status(401).json({ error: 'Session no longer valid.' });
+        }
+        res.json({ user: toPublicUser(user) });
+    } catch (err) {
+        return res.status(401).json({ error: 'Session expired or invalid.' });
+    }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -468,6 +500,7 @@ app.get('/api/admin/setup-status', (req, res) => {
 });
 
 app.post('/api/admin/login', async (req, res) => {
+  try {
     const { userId, password } = req.body || {};
     if (!userId || !password) {
         return res.status(400).json({ error: 'User ID and password are required.' });
@@ -475,7 +508,7 @@ app.post('/api/admin/login', async (req, res) => {
 
     const users = loadUsers();
     const admin = users.find(u => u.userId === userId && u.userType === 'admin');
-    if (!admin) {
+    if (!admin || !admin.passwordHash) {
         return res.status(401).json({ error: 'Invalid admin credentials.' });
     }
 
@@ -495,6 +528,10 @@ app.post('/api/admin/login', async (req, res) => {
     appendAuditLog({ adminUserId: admin.userId, action: 'admin_login' });
 
     res.json({ user: toPublicUser(admin) });
+  } catch (err) {
+    console.error('Admin login failed:', err);
+    res.status(500).json({ error: 'Login failed due to a server error. Please try again.' });
+  }
 });
 
 app.post('/api/admin/logout', requireAdmin, (req, res) => {
