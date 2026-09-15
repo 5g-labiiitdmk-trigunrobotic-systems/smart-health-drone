@@ -5,9 +5,18 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
 const { computeRoute } = require('./routing');
 const { queryOverpass } = require('./overpass');
+
+// Secret used to sign admin session JWTs. Falls back to a random value
+// generated at process start (still secure, just invalidates existing
+// admin sessions on every restart) so this never silently runs with a
+// guessable default; set ADMIN_JWT_SECRET in production for sessions
+// that survive restarts.
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || uuidv4() + uuidv4();
 
 const app = express();
 const server = http.createServer(app);
@@ -77,9 +86,66 @@ function toPublicUser(user) {
     return publicUser;
 }
 
+// --- Historical emergency request log (persisted; survives restarts) ---
+const EMERGENCY_LOG_FILE = path.join(__dirname, 'emergency-log.json');
+
+function loadEmergencyLog() {
+    try {
+        return JSON.parse(fs.readFileSync(EMERGENCY_LOG_FILE, 'utf8'));
+    } catch (err) {
+        return [];
+    }
+}
+
+function saveEmergencyLog(log) {
+    fs.writeFileSync(EMERGENCY_LOG_FILE, JSON.stringify(log, null, 2));
+}
+
+function appendEmergencyLog(entry) {
+    const log = loadEmergencyLog();
+    log.push(entry);
+    saveEmergencyLog(log);
+    return entry;
+}
+
+// Updates the first log entry matching roomId + one of the given
+// current statuses, and returns it (or null if no match was found).
+function updateEmergencyLogByRoom(roomId, matchStatuses, changes) {
+    const log = loadEmergencyLog();
+    const entry = log.find(e => e.roomId === roomId && matchStatuses.includes(e.status));
+    if (!entry) return null;
+    Object.assign(entry, changes);
+    saveEmergencyLog(log);
+    return entry;
+}
+
+// --- Admin audit trail (persisted; who did what, and when) ---
+const AUDIT_LOG_FILE = path.join(__dirname, 'audit-log.json');
+
+function loadAuditLog() {
+    try {
+        return JSON.parse(fs.readFileSync(AUDIT_LOG_FILE, 'utf8'));
+    } catch (err) {
+        return [];
+    }
+}
+
+function appendAuditLog({ adminUserId, action, details }) {
+    const log = loadAuditLog();
+    log.push({
+        id: uuidv4(),
+        timestamp: Date.now(),
+        adminUserId,
+        action,
+        details: details || null
+    });
+    fs.writeFileSync(AUDIT_LOG_FILE, JSON.stringify(log, null, 2));
+}
+
 // Serve static files
 app.use(express.static(__dirname));
 app.use(express.json());
+app.use(cookieParser());
 
 // Route handlers
 app.get('/', (req, res) => {
@@ -285,45 +351,137 @@ app.post('/api/route', async (req, res) => {
     }
 });
 
-// --- Admin authentication (placeholder) ---
-// A single shared admin credential via env vars, good enough to gate the
-// admin panel for now. This is NOT a real role-based auth system: tokens
-// are held in memory (lost on restart, not scoped per-admin-user) and
-// there is only one admin account. Replace with proper per-admin accounts
-// and persisted sessions before relying on this for real access control.
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
-const adminSessions = new Set();
+// --- Admin authentication (real, per-account, hashed + signed sessions) ---
+// Admin accounts live in the same users.json store as doctors/drone
+// operators, distinguished by userType === 'admin', with bcrypt-hashed
+// passwords exactly like every other account. Session state is a signed
+// JWT held in an httpOnly cookie (not readable/forgeable from client JS),
+// so there is no more in-memory token set and no shared env-var password.
+const ADMIN_COOKIE = 'admin_session';
+const ADMIN_TOKEN_TTL = '12h';
 
 function requireAdmin(req, res, next) {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token || !adminSessions.has(token)) {
+    const token = req.cookies && req.cookies[ADMIN_COOKIE];
+    if (!token) {
         return res.status(401).json({ error: 'Admin authentication required.' });
     }
-    next();
+    try {
+        const payload = jwt.verify(token, ADMIN_JWT_SECRET);
+        if (payload.role !== 'admin') throw new Error('not an admin token');
+        req.adminUserId = payload.userId;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Admin session expired or invalid. Please log in again.' });
+    }
 }
 
-app.post('/api/admin/login', (req, res) => {
-    if (!ADMIN_PASSWORD) {
-        return res.status(500).json({
-            error: 'Admin login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD env vars on the server.'
-        });
+// One-time setup: creates the FIRST admin account. Refuses once any admin
+// account already exists, so this can never be used to mint unauthorized
+// extra admins after initial setup -- further admins are created by an
+// already-authenticated admin (see POST /api/admin/users below).
+app.post('/api/admin/setup', async (req, res) => {
+    const { name, userId, email, password } = req.body || {};
+    if (!name || !userId || !email || !password) {
+        return res.status(400).json({ error: 'name, userId, email and password are required.' });
     }
-    const { username, password } = req.body || {};
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+
+    const users = loadUsers();
+    if (users.some(u => u.userType === 'admin')) {
+        return res.status(403).json({ error: 'An admin account already exists. Setup is one-time only.' });
+    }
+    if (users.some(u => u.userId === userId)) {
+        return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, createdAt: Date.now() };
+    users.push(newAdmin);
+    saveUsers(users);
+
+    appendAuditLog({ adminUserId: userId, action: 'admin_account_created', details: { via: 'initial_setup' } });
+
+    res.status(201).json({ user: toPublicUser(newAdmin) });
+});
+
+// Lets the dashboard know whether setup still needs to run, without
+// exposing anything about existing accounts.
+app.get('/api/admin/setup-status', (req, res) => {
+    const users = loadUsers();
+    res.json({ setupRequired: !users.some(u => u.userType === 'admin') });
+});
+
+app.post('/api/admin/login', async (req, res) => {
+    const { userId, password } = req.body || {};
+    if (!userId || !password) {
+        return res.status(400).json({ error: 'User ID and password are required.' });
+    }
+
+    const users = loadUsers();
+    const admin = users.find(u => u.userId === userId && u.userType === 'admin');
+    if (!admin) {
         return res.status(401).json({ error: 'Invalid admin credentials.' });
     }
-    const token = uuidv4();
-    adminSessions.add(token);
-    res.json({ token });
+
+    const match = await bcrypt.compare(password, admin.passwordHash);
+    if (!match) {
+        return res.status(401).json({ error: 'Invalid admin credentials.' });
+    }
+
+    const token = jwt.sign({ userId: admin.userId, role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: ADMIN_TOKEN_TTL });
+    res.cookie(ADMIN_COOKIE, token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+        maxAge: 12 * 60 * 60 * 1000
+    });
+
+    appendAuditLog({ adminUserId: admin.userId, action: 'admin_login' });
+
+    res.json({ user: toPublicUser(admin) });
 });
 
 app.post('/api/admin/logout', requireAdmin, (req, res) => {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.slice(7);
-    adminSessions.delete(token);
+    appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_logout' });
+    res.clearCookie(ADMIN_COOKIE);
     res.json({ success: true });
+});
+
+// Lets the dashboard confirm an existing session (e.g. after a page
+// reload) without needing to resend credentials.
+app.get('/api/admin/me', requireAdmin, (req, res) => {
+    const users = loadUsers();
+    const admin = users.find(u => u.userId === req.adminUserId && u.userType === 'admin');
+    if (!admin) return res.status(401).json({ error: 'Admin account no longer exists.' });
+    res.json({ user: toPublicUser(admin) });
+});
+
+// Create additional admin accounts. Only an already-authenticated admin
+// can do this, so this is the ONLY path to more admins after setup.
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+    const { name, userId, email, password } = req.body || {};
+    if (!name || !userId || !email || !password) {
+        return res.status(400).json({ error: 'name, userId, email and password are required.' });
+    }
+    if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+
+    const users = loadUsers();
+    if (users.some(u => u.userId === userId)) {
+        return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newAdmin = { name, userId, email, userType: 'admin', passwordHash, createdAt: Date.now() };
+    users.push(newAdmin);
+    saveUsers(users);
+
+    appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_account_created', details: { createdUserId: userId } });
+
+    res.status(201).json({ user: toPublicUser(newAdmin) });
 });
 
 // Registered users annotated with live online/pairing status for the admin panel.
@@ -359,6 +517,10 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
     if (idx === -1) {
         return res.status(404).json({ error: 'User not found.' });
     }
+    const removed = users[idx];
+    if (removed.userType === 'admin') {
+        return res.status(400).json({ error: 'Admin accounts cannot be removed from this endpoint.' });
+    }
     users.splice(idx, 1);
     saveUsers(users);
 
@@ -372,7 +534,155 @@ app.delete('/api/admin/users/:userId', requireAdmin, (req, res) => {
         onlineUsers.delete(req.params.userId);
     }
 
+    appendAuditLog({
+        adminUserId: req.adminUserId,
+        action: 'user_removed',
+        details: { userId: removed.userId, name: removed.name, userType: removed.userType }
+    });
+
     res.json({ success: true });
+});
+
+// Shared editable-field logic for both doctor and drone-operator updates.
+// Mirrors the validation registration already performs, and never allows
+// userId/userType/passwordHash to be changed through this endpoint.
+async function updateUserDetails(req, res, expectedUserType) {
+    const users = loadUsers();
+    const idx = users.findIndex(u => u.userId === req.params.userId && u.userType === expectedUserType);
+    if (idx === -1) {
+        return res.status(404).json({ error: `${expectedUserType === 'doctor' ? 'Doctor' : 'Drone operator'} not found.` });
+    }
+
+    const { name, email, phone, specialization, license, clinic, city, village, state, country, password } = req.body || {};
+
+    if (name !== undefined && !String(name).trim()) {
+        return res.status(400).json({ error: 'Name cannot be empty.' });
+    }
+    if (email !== undefined && !String(email).trim()) {
+        return res.status(400).json({ error: 'Email cannot be empty.' });
+    }
+    if (phone !== undefined && !String(phone).trim()) {
+        return res.status(400).json({ error: 'Phone cannot be empty.' });
+    }
+
+    const user = users[idx];
+    const before = { ...user };
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email;
+    if (phone !== undefined) user.phone = phone;
+
+    if (expectedUserType === 'doctor') {
+        if (specialization !== undefined) user.specialization = specialization;
+        if (license !== undefined) user.license = license;
+        if (clinic !== undefined) user.clinic = clinic;
+    } else {
+        if (city !== undefined) user.city = city;
+        if (village !== undefined) user.village = village;
+        if (state !== undefined) user.state = state;
+        if (country !== undefined) user.country = country;
+    }
+
+    if (password) {
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+        }
+        user.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    saveUsers(users);
+
+    const changedFields = Object.keys(req.body || {}).filter(k => k !== 'password');
+    appendAuditLog({
+        adminUserId: req.adminUserId,
+        action: 'user_edited',
+        details: { userId: user.userId, userType: user.userType, changedFields }
+    });
+
+    res.json({ user: toPublicUser(user) });
+}
+
+app.put('/api/doctors/:userId', requireAdmin, async (req, res) => updateUserDetails(req, res, 'doctor'));
+app.put('/api/drones/:userId', requireAdmin, async (req, res) => updateUserDetails(req, res, 'drone_operator'));
+
+// --- Analytics: computed entirely from the persisted emergency log ---
+app.get('/api/admin/analytics', requireAdmin, (req, res) => {
+    const log = loadEmergencyLog();
+    const users = loadUsers();
+    const userName = (userId) => {
+        const u = users.find(x => x.userId === userId);
+        return u ? u.name : userId;
+    };
+
+    // Daily call counts (by createdAt date, oldest first).
+    const byDay = {};
+    for (const entry of log) {
+        const day = new Date(entry.createdAt).toISOString().slice(0, 10);
+        byDay[day] = (byDay[day] || 0) + 1;
+    }
+    const callsByDay = Object.entries(byDay)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({ date, count }));
+
+    // Average response time: assignedAt - createdAt, across entries that
+    // were ever accepted by a doctor.
+    const responseTimes = log
+        .filter(e => e.assignedAt)
+        .map(e => e.assignedAt - e.createdAt);
+    const avgResponseTimeMs = responseTimes.length
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+        : null;
+
+    // Per-doctor and per-drone-operator call counts.
+    const doctorCounts = {};
+    const droneCounts = {};
+    for (const entry of log) {
+        if (entry.doctorUserId) {
+            doctorCounts[entry.doctorUserId] = (doctorCounts[entry.doctorUserId] || 0) + 1;
+        }
+        if (entry.droneUserId) {
+            droneCounts[entry.droneUserId] = (droneCounts[entry.droneUserId] || 0) + 1;
+        }
+    }
+    const doctorUtilization = Object.entries(doctorCounts)
+        .map(([userId, count]) => ({ userId, name: userName(userId), count }))
+        .sort((a, b) => b.count - a.count);
+    const droneUtilization = Object.entries(droneCounts)
+        .map(([userId, count]) => ({ userId, name: userName(userId), count }))
+        .sort((a, b) => b.count - a.count);
+
+    res.json({
+        totalCalls: log.length,
+        callsByDay,
+        avgResponseTimeMs,
+        doctorUtilization,
+        droneUtilization
+    });
+});
+
+// --- Historical emergency request log, filterable for the admin panel ---
+app.get('/api/admin/emergency-log', requireAdmin, (req, res) => {
+    const { from, to, doctorId, droneId } = req.query;
+    let log = loadEmergencyLog();
+
+    if (from) {
+        const fromMs = new Date(from).getTime();
+        if (!Number.isNaN(fromMs)) log = log.filter(e => e.createdAt >= fromMs);
+    }
+    if (to) {
+        const toMs = new Date(to).getTime();
+        if (!Number.isNaN(toMs)) log = log.filter(e => e.createdAt <= toMs);
+    }
+    if (doctorId) log = log.filter(e => e.doctorUserId === doctorId);
+    if (droneId) log = log.filter(e => e.droneUserId === droneId);
+
+    log.sort((a, b) => b.createdAt - a.createdAt);
+    res.json({ log });
+});
+
+// --- Admin audit trail, most recent first ---
+app.get('/api/admin/audit-log', requireAdmin, (req, res) => {
+    const log = loadAuditLog().sort((a, b) => b.timestamp - a.timestamp);
+    res.json({ log });
 });
 
 app.get('/admin.html', (req, res) => {
@@ -426,8 +736,18 @@ io.on('connection', (socket) => {
     socket.on('resetConnection', (roomId) => {
         if (roomId && activeConnections[roomId]) {
             delete activeConnections[roomId];
+            // An assigned pairing being reset is how this system represents
+            // a completed mission -- log it as such rather than letting the
+            // record just vanish from memory.
+            updateEmergencyLogByRoom(roomId, ['assigned'], {
+                status: 'completed',
+                resolvedAt: Date.now()
+            });
             console.log(`Connection ${roomId} reset by a client.`);
         } else {
+            for (const id of Object.keys(activeConnections)) {
+                updateEmergencyLogByRoom(id, ['assigned'], { status: 'completed', resolvedAt: Date.now() });
+            }
             activeConnections = {};
             console.log('All connections reset by a client.');
         }
@@ -469,6 +789,20 @@ io.on('connection', (socket) => {
         // it starts receiving anything sent to it as soon as it's assigned.
         socket.join(roomId);
 
+        appendEmergencyLog({
+            id: uuidv4(),
+            roomId,
+            droneUserId: request.droneUserId,
+            operatorName: request.operatorName,
+            location: request.location,
+            doctorUserId: null,
+            doctorName: null,
+            status: 'pending',
+            createdAt: request.timestamp,
+            assignedAt: null,
+            resolvedAt: null
+        });
+
         socket.emit('emergencyRequestCreated', { roomId });
         io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
         console.log(`New emergency request ${roomId} from ${request.operatorName}`);
@@ -477,6 +811,7 @@ io.on('connection', (socket) => {
     socket.on('cancelEmergencyRequest', (roomId) => {
         if (pendingRequests[roomId] && pendingRequests[roomId].socketId === socket.id) {
             delete pendingRequests[roomId];
+            updateEmergencyLogByRoom(roomId, ['pending'], { status: 'cancelled', resolvedAt: Date.now() });
             io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
         }
     });
@@ -502,6 +837,13 @@ io.on('connection', (socket) => {
         activeConnections[roomId] = connection;
         socket.join(roomId);
 
+        updateEmergencyLogByRoom(roomId, ['pending'], {
+            status: 'assigned',
+            doctorUserId: doctorUserId || null,
+            doctorName: doctorName || doctorUserId || null,
+            assignedAt: Date.now()
+        });
+
         // Tell the specific drone that raised this request who was assigned,
         // and let everyone know the request list / connection list changed.
         io.to(request.socketId).emit('assignedDoctor', connection);
@@ -526,6 +868,7 @@ io.on('connection', (socket) => {
         for (const [roomId, request] of Object.entries(pendingRequests)) {
             if (request.socketId === socket.id) {
                 delete pendingRequests[roomId];
+                updateEmergencyLogByRoom(roomId, ['pending'], { status: 'timed_out', resolvedAt: Date.now() });
                 requestsChanged = true;
             }
         }
