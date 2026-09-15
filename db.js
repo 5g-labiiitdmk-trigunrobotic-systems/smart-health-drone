@@ -25,8 +25,27 @@ if (DATABASE_URL) {
         // certificate not in Node's default trust store; this app's
         // threat model (small internal tool, no sensitive financial data)
         // accepts that trade-off the same way most simple deployments do.
-        ssl: { rejectUnauthorized: false }
+        ssl: { rejectUnauthorized: false },
+        // A dropped idle connection shouldn't crash the whole process --
+        // without this handler, an 'error' event with no listener is a
+        // fatal uncaught exception in Node.
+        connectionTimeoutMillis: 15000
     });
+    pool.on('error', (err) => {
+        console.error('Unexpected database pool error:', err.message);
+    });
+
+    // Free-tier Postgres (Neon included) auto-suspends the underlying
+    // compute after a few minutes of inactivity; the next query then pays
+    // a multi-second "cold start" cost, which can be slow enough to time
+    // out a request. A lightweight keep-alive query on a shorter interval
+    // than the provider's suspend timeout keeps the connection warm so
+    // real requests don't pay that cost.
+    setInterval(() => {
+        pool.query('SELECT 1').catch(err => {
+            console.error('Keep-alive ping failed:', err.message);
+        });
+    }, 4 * 60 * 1000);
 }
 
 const USERS_FILE = path.join(__dirname, 'users.json');
