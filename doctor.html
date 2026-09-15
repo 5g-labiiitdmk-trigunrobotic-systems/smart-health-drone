@@ -4,6 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Interface - IIIT Kurnool Ambulance Drone</title>
+    <script>
+        // Hide the page until the session check below confirms this is a
+        // logged-in doctor, so an unauthenticated visitor never sees a
+        // flash of the doctor panel before being redirected away.
+        document.documentElement.style.visibility = 'hidden';
+        (async function requireDoctorSession() {
+            try {
+                const res = await fetch('/api/me', { credentials: 'include' });
+                if (!res.ok) { window.location.href = '/'; return; }
+                const data = await res.json();
+                if (data.user.userType !== 'doctor') { window.location.href = '/'; return; }
+                localStorage.setItem('myUserId', data.user.userId);
+                localStorage.setItem('myRole', data.user.userType);
+                localStorage.setItem('myName', data.user.name);
+                document.documentElement.style.visibility = 'visible';
+            } catch (err) {
+                window.location.href = '/';
+            }
+        })();
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
     <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
     <style>
@@ -451,6 +471,7 @@
                 <i class="fas fa-clock time-icon"></i>
                 <span id="sim-time">00:00:00</span>
             </div>
+            <button id="logoutBtn" style="padding: 8px 16px; font-size: 0.85rem; border: none; border-radius: 6px; background: var(--primary); color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;"><i class="fas fa-sign-out-alt"></i> Logout</button>
         </div>
     </header>
 
@@ -836,6 +857,16 @@
             endVideoCall();
         }, { passive: false });
         window.addEventListener('beforeunload', endVideoCall);
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            } catch (err) { /* ignore */ }
+            localStorage.removeItem('myUserId');
+            localStorage.removeItem('myRole');
+            localStorage.removeItem('myName');
+            window.location.href = '/';
+        });
 
         // --- Console Logging ---
         function addLogEntry(message, type) {

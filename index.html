@@ -856,10 +856,290 @@
         .status-disconnected {
             background-color: var(--danger);
         }
+
+        /* --- Auth Gate (login-required landing screen) --- */
+        #authGateView {
+            min-height: 100vh;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .auth-gate-visual {
+            flex: 1 1 480px;
+            min-width: 320px;
+            position: relative;
+            background: linear-gradient(160deg, #e8f2fb 0%, #d3e9f7 55%, #bfe0ed 100%);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .auth-gate-visual::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 40%;
+            background: linear-gradient(180deg, rgba(31,122,128,0) 0%, rgba(15,90,110,0.85) 100%);
+            pointer-events: none;
+        }
+
+        .auth-gate-brands {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .auth-gate-brands img {
+            height: 44px;
+            width: 44px;
+            object-fit: contain;
+        }
+
+        .auth-gate-brands .brand-divider {
+            height: 32px;
+        }
+
+        .auth-gate-title {
+            margin-top: 48px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .auth-gate-title h1 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 3.2rem;
+            font-weight: 800;
+            color: #0C2543;
+            line-height: 1;
+        }
+
+        .auth-gate-title p.subtitle {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #0B5264;
+            margin-top: 6px;
+        }
+
+        .auth-gate-title p.tagline {
+            font-size: 0.95rem;
+            color: #4a5568;
+            margin-top: 4px;
+        }
+
+        .auth-gate-drone-img {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 460px;
+            align-self: center;
+            border-radius: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .auth-gate-features {
+            position: relative;
+            z-index: 2;
+            margin-top: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            color: #ffffff;
+            padding-top: 20px;
+        }
+
+        .auth-gate-features .feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .auth-gate-features .feature .icon-circle {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .auth-gate-form-side {
+            flex: 1 1 420px;
+            min-width: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 30px;
+            background: #ffffff;
+        }
+
+        .auth-gate-form-box {
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .auth-gate-form-box h2 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #0C2543;
+        }
+
+        .auth-gate-form-box > p {
+            color: #6b7280;
+            margin-top: 6px;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+
+        .auth-gate-roles {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .auth-gate-role-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: 1px solid #d9dee5;
+            background: #f5f9fd;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #4a5568;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .auth-gate-role-btn.active {
+            background: var(--accent-text);
+            border-color: var(--accent-text);
+            color: #ffffff;
+        }
+
+        .auth-gate-input-group {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .auth-gate-input-group i.field-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9aa5b1;
+        }
+
+        .auth-gate-input-group input {
+            width: 100%;
+            padding: 13px 14px 13px 42px;
+            border: 1px solid #d9dee5;
+            border-radius: 10px;
+            font-size: 0.95rem;
+        }
+
+        .auth-gate-input-group .toggle-visibility {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9aa5b1;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+
+        .auth-gate-submit {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: var(--accent-text);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .auth-gate-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: #9aa5b1;
+            font-size: 0.8rem;
+        }
+
+        .auth-gate-divider::before, .auth-gate-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0e5eb;
+        }
+
+        .auth-gate-secondary-btn {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid var(--accent-text);
+            border-radius: 10px;
+            background: #ffffff;
+            color: var(--accent-text);
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .auth-gate-footer-note {
+            margin-top: 24px;
+            background: #f5f9fd;
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: #4a5568;
+        }
+
+        .auth-gate-footer-note i {
+            color: var(--accent-text);
+            font-size: 1.2rem;
+        }
+
+        .auth-gate-status-msg {
+            margin-top: 14px;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .auth-gate-status-msg.error { color: var(--danger); }
+        .auth-gate-status-msg.success { color: var(--success); }
+
+        @media (max-width: 768px) {
+            .auth-gate-title h1 { font-size: 2.2rem; }
+            .auth-gate-features { display: none; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div id="authGateView" hidden></div>
+
+    <div class="container" id="appContent" hidden>
         <header class="site-header">
             <div class="header-brands">
                 <div class="brand-block">
@@ -888,6 +1168,7 @@
                 <a href="#" id="registerLink"><i class="fas fa-user"></i> Register</a>
                 <a href="#" id="registeredUsersLink"><i class="fas fa-users"></i> Registered Drone and Doctors</a>
                 <a href="#" id="aboutLink"><i class="fas fa-info-circle"></i> About</a>
+                <a href="#" id="logoutLink"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
 
             <div class="status-pill" id="connectionStatus">
@@ -1251,7 +1532,213 @@
     secure: true
 });
 
+        // --- Auth gate: index.html requires a valid session before showing
+        // any hero/nav/card content. Renders entirely with icon fonts
+        // (Font Awesome, already used elsewhere in this app) -- no emoji. ---
+        const authGateView = document.getElementById('authGateView');
+        const appContent = document.getElementById('appContent');
+        let authGateRole = 'doctor';
 
+        function renderAuthGate() {
+            authGateView.innerHTML = `
+                <div class="auth-gate-visual">
+                    <div class="auth-gate-brands">
+                        <img src="/assets/logos/iiitdm-logo.jpeg" alt="IIITDM Kurnool logo">
+                        <div class="brand-divider"></div>
+                        <img src="/assets/logos/trigun-logo.png" alt="Trigun Robotic Systems logo">
+                    </div>
+                    <div class="auth-gate-title">
+                        <h1>DRUVA</h1>
+                        <p class="subtitle">Drone for Rural and Urban Visual Aid</p>
+                        <p class="tagline">Bridging Distance. Delivering Care.</p>
+                    </div>
+                    <div class="auth-gate-features">
+                        <div class="feature"><span class="icon-circle"><i class="fas fa-heartbeat"></i></span> Emergency Medical Aid</div>
+                        <div class="feature"><span class="icon-circle"><i class="fas fa-map-marker-alt"></i></span> Real-time Monitoring</div>
+                        <div class="feature"><span class="icon-circle"><i class="fas fa-bolt"></i></span> Faster Response</div>
+                        <div class="feature"><span class="icon-circle"><i class="fas fa-users"></i></span> Safer Communities</div>
+                    </div>
+                </div>
+                <div class="auth-gate-form-side">
+                    <div class="auth-gate-form-box">
+                        <h2>Welcome Back</h2>
+                        <p>Sign in to access your DRUVA account</p>
+                        <div class="auth-gate-roles" id="authGateRoles">
+                            <button type="button" class="auth-gate-role-btn active" data-role="doctor">Doctor</button>
+                            <button type="button" class="auth-gate-role-btn" data-role="drone_operator">Drone Operator</button>
+                            <button type="button" class="auth-gate-role-btn" data-role="admin">Admin</button>
+                        </div>
+                        <form id="authGateForm">
+                            <div id="authGateCredFields">
+                                <div class="auth-gate-input-group">
+                                    <i class="fas fa-user field-icon"></i>
+                                    <input type="text" id="authGateUserId" placeholder="User ID" autocomplete="username" required>
+                                </div>
+                                <div class="auth-gate-input-group">
+                                    <i class="fas fa-lock field-icon"></i>
+                                    <input type="password" id="authGatePassword" placeholder="Password" autocomplete="current-password" required>
+                                    <button type="button" class="toggle-visibility" id="authGateToggleVisibility"><i class="fas fa-eye"></i></button>
+                                </div>
+                            </div>
+                            <button type="submit" class="auth-gate-submit" id="authGateSubmitBtn">
+                                <span id="authGateSubmitLabel">Login</span> <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <p class="auth-gate-status-msg" id="authGateStatusMsg" hidden></p>
+                        </form>
+                        <div class="auth-gate-divider">OR</div>
+                        <button type="button" class="auth-gate-secondary-btn" id="authGateCreateAccountBtn">
+                            <i class="fas fa-user-plus"></i> Create Account
+                        </button>
+                        <div class="auth-gate-footer-note">
+                            <i class="fas fa-drone"></i>
+                            <span><strong>DRUVA</strong> &mdash; Smarter Drones. Healthier Communities.</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const roleButtons = authGateView.querySelectorAll('.auth-gate-role-btn');
+            const credFields = document.getElementById('authGateCredFields');
+            const submitLabel = document.getElementById('authGateSubmitLabel');
+
+            const userIdInput = document.getElementById('authGateUserId');
+            const passwordInput = document.getElementById('authGatePassword');
+
+            function applyRoleUI() {
+                roleButtons.forEach(b => b.classList.toggle('active', b.dataset.role === authGateRole));
+                if (authGateRole === 'admin') {
+                    credFields.hidden = true;
+                    // Belt-and-suspenders alongside credFields.hidden: some
+                    // browsers still run constraint validation on a
+                    // required field inside a hidden ancestor, blocking
+                    // form submit with "not focusable" -- explicitly drop
+                    // required while these fields are hidden.
+                    userIdInput.required = false;
+                    passwordInput.required = false;
+                    submitLabel.textContent = 'Go to Admin Login';
+                } else {
+                    credFields.hidden = false;
+                    userIdInput.required = true;
+                    passwordInput.required = true;
+                    submitLabel.textContent = 'Login';
+                }
+            }
+            applyRoleUI();
+
+            roleButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    authGateRole = btn.dataset.role;
+                    applyRoleUI();
+                });
+            });
+
+            document.getElementById('authGateToggleVisibility').addEventListener('click', () => {
+                const input = document.getElementById('authGatePassword');
+                const icon = document.querySelector('#authGateToggleVisibility i');
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.className = 'fas fa-eye-slash';
+                } else {
+                    input.type = 'password';
+                    icon.className = 'fas fa-eye';
+                }
+            });
+
+            document.getElementById('authGateCreateAccountBtn').addEventListener('click', () => {
+                registerModal.style.display = 'block';
+            });
+
+            document.getElementById('authGateForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const statusMsg = document.getElementById('authGateStatusMsg');
+                statusMsg.hidden = true;
+
+                if (authGateRole === 'admin') {
+                    window.location.href = '/admin.html';
+                    return;
+                }
+
+                const userId = document.getElementById('authGateUserId').value;
+                const password = document.getElementById('authGatePassword').value;
+
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ userId, password })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        statusMsg.textContent = data.error || 'Login failed.';
+                        statusMsg.className = 'auth-gate-status-msg error';
+                        statusMsg.hidden = false;
+                        return;
+                    }
+                    if (data.user.userType !== authGateRole) {
+                        statusMsg.textContent = `That account is registered as a ${data.user.userType.replace('_', ' ')}, not a ${authGateRole.replace('_', ' ')}. Logging you in with your account's actual role.`;
+                        statusMsg.className = 'auth-gate-status-msg error';
+                        statusMsg.hidden = false;
+                    }
+                    onLoginSuccess(data.user);
+                } catch (err) {
+                    statusMsg.textContent = 'Could not reach the server. Please try again.';
+                    statusMsg.className = 'auth-gate-status-msg error';
+                    statusMsg.hidden = false;
+                }
+            });
+        }
+
+        function onLoginSuccess(user) {
+            localStorage.setItem('myUserId', user.userId);
+            localStorage.setItem('myRole', user.userType);
+            localStorage.setItem('myName', user.name);
+            socket.emit('identify', { userId: user.userId, role: user.userType });
+
+            if (user.userType === 'admin') {
+                window.location.href = '/admin.html';
+                return;
+            }
+
+            authGateView.hidden = true;
+            appContent.hidden = false;
+        }
+
+        async function checkAuthGate() {
+            try {
+                const res = await fetch('/api/me', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.user.userType === 'admin') {
+                        window.location.href = '/admin.html';
+                        return;
+                    }
+                    socket.emit('identify', { userId: data.user.userId, role: data.user.userType });
+                    localStorage.setItem('myUserId', data.user.userId);
+                    localStorage.setItem('myRole', data.user.userType);
+                    localStorage.setItem('myName', data.user.name);
+                    authGateView.hidden = true;
+                    appContent.hidden = false;
+                    return;
+                }
+            } catch (err) { /* fall through to showing the login gate */ }
+            renderAuthGate();
+            authGateView.hidden = false;
+            appContent.hidden = true;
+        }
+
+        checkAuthGate();
+
+        document.getElementById('logoutLink').addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            } catch (err) { /* ignore */ }
+            localStorage.removeItem('myUserId');
+            localStorage.removeItem('myRole');
+            localStorage.removeItem('myName');
+            window.location.reload();
+        });
 
 	// Navigation Toggle
         const navToggle = document.getElementById('navToggle');
@@ -1635,10 +2122,12 @@
         const operatorFields = document.getElementById('operatorFields');
 
         // Event listener for switching to login from registration
+        // The main login screen is now the full-page auth gate shown behind
+        // this modal to anyone not yet logged in, so "Login here" just
+        // needs to close the registration modal to reveal it again.
         showLogin.addEventListener('click', (e) => {
             e.preventDefault();
             registerModal.style.display = 'none';
-            loginModal.style.display = 'block';
         });
 
         // Event listener for switching to registration from login
@@ -1769,10 +2258,8 @@
                     return;
                 }
 
-                alert(`Registration successful! Your User ID is: ${regUserId}. You can now login.`);
+                alert(`Registration submitted! Your User ID is: ${regUserId}. Your registration is pending admin approval. You'll be able to log in once approved.`);
                 registerModal.style.display = 'none';
-                document.getElementById('loginUserId').value = regUserId;
-                loginModal.style.display = 'block';
                 document.getElementById('registrationForm').reset();
             } catch (err) {
                 console.error('Registration request failed:', err);

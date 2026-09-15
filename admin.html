@@ -497,6 +497,7 @@
 
         <div class="tabs">
             <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="approvals">Pending Approvals <span class="badge badge-paired" id="pendingApprovalsBadge" hidden>0</span></button>
             <button class="tab-btn" data-tab="analytics">Analytics</button>
             <button class="tab-btn" data-tab="history">Emergency History</button>
             <button class="tab-btn" data-tab="users">Users</button>
@@ -514,6 +515,15 @@
             <div class="card">
                 <h2><i class="fas fa-bell"></i> Unassigned Emergency Requests</h2>
                 <div id="pendingTableWrap">
+                    <p class="empty-note">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-panel" id="tab-approvals" hidden>
+            <div class="card">
+                <h2><i class="fas fa-user-clock"></i> Pending Approvals</h2>
+                <div id="pendingApprovalsTableWrap">
                     <p class="empty-note">Loading...</p>
                 </div>
             </div>
@@ -819,6 +829,7 @@
                 document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
                 btn.classList.add('active');
                 document.getElementById('tab-' + btn.dataset.tab).hidden = false;
+                if (btn.dataset.tab === 'approvals') refreshPendingApprovals();
                 if (btn.dataset.tab === 'analytics') refreshAnalytics();
                 if (btn.dataset.tab === 'history') refreshHistory();
                 if (btn.dataset.tab === 'audit') refreshAudit();
@@ -1081,6 +1092,82 @@
             }
         }
 
+        // --- Pending approvals (new registrations awaiting admin action) ---
+        function pendingApprovalDetail(u) {
+            if (u.userType === 'doctor') {
+                return [u.specialization, u.license].filter(Boolean).join(' / ') || 'Doctor';
+            }
+            return [u.city, u.state].filter(Boolean).join(', ') || 'Drone Operator';
+        }
+
+        async function refreshPendingApprovals() {
+            try {
+                const res = await adminFetch('/api/admin/pending-users');
+                const { users } = await res.json();
+                updatePendingApprovalsBadge(users.length);
+
+                const wrap = document.getElementById('pendingApprovalsTableWrap');
+                if (!users.length) {
+                    wrap.innerHTML = '<p class="empty-note">No accounts awaiting approval.</p>';
+                    return;
+                }
+                const rows = users.map(u => `
+                    <tr>
+                        <td data-label="Name">${u.name}</td>
+                        <td data-label="User ID">${u.userId}</td>
+                        <td data-label="Role">${u.userType === 'doctor' ? 'Doctor' : 'Drone Operator'}</td>
+                        <td data-label="Detail">${pendingApprovalDetail(u)}</td>
+                        <td data-label="Contact">${u.email || ''}${u.phone ? ' / ' + u.phone : ''}</td>
+                        <td data-label="Action">
+                            <button class="btn" data-approve="${u.userId}" style="margin-right: 6px;">Approve</button>
+                            <button class="btn btn-danger" data-reject="${u.userId}">Reject</button>
+                        </td>
+                    </tr>
+                `).join('');
+                wrap.innerHTML = `
+                    <table>
+                        <thead><tr><th>Name</th><th>User ID</th><th>Role</th><th>Detail</th><th>Contact</th><th></th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+                wrap.querySelectorAll('[data-approve]').forEach(btn => {
+                    btn.addEventListener('click', () => actOnPendingUser(btn.getAttribute('data-approve'), 'approve'));
+                });
+                wrap.querySelectorAll('[data-reject]').forEach(btn => {
+                    btn.addEventListener('click', () => actOnPendingUser(btn.getAttribute('data-reject'), 'reject'));
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function actOnPendingUser(userId, action) {
+            const verb = action === 'approve' ? 'approve' : 'reject';
+            if (!confirm(`${verb === 'approve' ? 'Approve' : 'Reject'} registration for "${userId}"?`)) return;
+            try {
+                const res = await adminFetch(`/api/admin/users/${encodeURIComponent(userId)}/${action}`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || `Failed to ${verb} user.`);
+                    return;
+                }
+                refreshPendingApprovals();
+                refreshUsers();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function updatePendingApprovalsBadge(count) {
+            const badge = document.getElementById('pendingApprovalsBadge');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.hidden = false;
+            } else {
+                badge.hidden = true;
+            }
+        }
+
         // --- Edit user modal ---
         const editModalOverlay = document.getElementById('editModalOverlay');
         const editError = document.getElementById('editError');
@@ -1192,7 +1279,7 @@
 
         async function refreshAll() {
             try {
-                await Promise.all([refreshUsers(), refreshConnections()]);
+                await Promise.all([refreshUsers(), refreshConnections(), refreshPendingApprovals()]);
             } catch (err) {
                 console.error(err);
             }
@@ -1203,6 +1290,7 @@
         const socket = io();
         socket.on('currentConnectionStatus', () => { if (isLoggedIn) refreshConnections(); });
         socket.on('pendingRequestsUpdated', () => { if (isLoggedIn) refreshConnections(); });
+        socket.on('newRegistrationPending', () => { if (isLoggedIn) refreshPendingApprovals(); });
         setInterval(() => { if (isLoggedIn) refreshAll(); }, 15000);
 
         // Bootstrap: figure out whether to show setup, login, or the
