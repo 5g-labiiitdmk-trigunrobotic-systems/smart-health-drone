@@ -316,49 +316,68 @@
         }
         
         .btn {
-            padding: 10px;
+            padding: 10px 16px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.2px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         }
-        
+
         .btn-primary {
-            background: var(--primary);
+            background: linear-gradient(135deg, #3b6fd6, var(--secondary));
             color: white;
         }
-        
+
         .btn-secondary {
-            background: var(--secondary);
+            background: linear-gradient(135deg, #24446f, var(--secondary));
             color: white;
         }
-        
+
         .btn-success {
-            background: var(--success);
+            background: linear-gradient(135deg, #3fbcac, var(--success));
             color: white;
         }
-        
+
         .btn-warning {
-            background: var(--warning);
+            background: linear-gradient(135deg, #f0d087, var(--warning));
             color: #1a1a1a;
         }
-        
+
         .btn-danger {
-            background: var(--danger);
+            background: linear-gradient(135deg, #ff8a65, var(--danger));
             color: white;
         }
-        
-        .btn:hover {
+
+        .btn:hover:not(:disabled) {
             transform: translateY(-2px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+            filter: brightness(1.06);
         }
-        
-        .btn:active {
+
+        .btn:active:not(:disabled) {
             transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+            filter: brightness(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+            filter: grayscale(0.3);
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         
         .status-indicators {
@@ -2187,7 +2206,10 @@
                 addLogEntry(`Road route calculated: ${data.distanceKm.toFixed(1)} km, ETA ${data.etaMinutes.toFixed(1)} min`, 'success');
                 return data;
             } catch (err) {
-                console.error('A* route request failed:', err);
+                // Already fully handled below (dashed direct-line fallback), so
+                // this is expected/recoverable, not an unhandled error -- warn
+                // instead of error to avoid alarming devtools noise.
+                console.warn('A* route request failed, falling back to a direct line:', err.message);
                 addLogEntry(`Road routing unavailable (${err.message}); using a direct line instead.`, 'alert');
                 // Fallback so the simulation can still run if the routing
                 // service (or its OpenStreetMap data source) is unreachable.

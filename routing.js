@@ -74,6 +74,21 @@ function buildGraphFromOverpassElements(elements) {
     return { nodes, graph };
 }
 
+// Cache of recently-fetched road graphs, keyed by a rounded bounding box.
+// Overpass is a free, rate-limited service that occasionally goes down
+// across all mirrors at once (see overpass.js); if that happens shortly
+// after a successful fetch for roughly the same area, reusing the cached
+// graph keeps routing working instead of falling all the way back to a
+// straight line. Rounding the bbox to ~1km lets nearby requests share an
+// entry instead of needing an exact match.
+const ROAD_GRAPH_CACHE = new Map(); // key -> { graphData, expiresAt }
+const ROAD_GRAPH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function roadGraphCacheKey(bbox) {
+    const round = (n) => n.toFixed(2);
+    return `${round(bbox.south)},${round(bbox.west)},${round(bbox.north)},${round(bbox.east)}`;
+}
+
 async function fetchRoadGraph(bbox, fetchImpl = fetch) {
     // This pulls every drivable way (plus every node they reference) in the
     // bounding box -- much heavier than the simple point-radius hospital
@@ -82,9 +97,21 @@ async function fetchRoadGraph(bbox, fetchImpl = fetch) {
     // it aborts the connection before the server's own timeout would even
     // fire -- which is exactly what was happening with the 8s default
     // tuned for the lightweight hospital lookup.
+    const cacheKey = roadGraphCacheKey(bbox);
     const query = `[out:json][timeout:25];way["highway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});(._;>;);out body;`;
-    const data = await queryOverpass(query, { fetchImpl, timeoutMs: 28000 });
-    return buildGraphFromOverpassElements(data.elements || []);
+
+    try {
+        const data = await queryOverpass(query, { fetchImpl, timeoutMs: 28000 });
+        const graphData = buildGraphFromOverpassElements(data.elements || []);
+        ROAD_GRAPH_CACHE.set(cacheKey, { graphData, expiresAt: Date.now() + ROAD_GRAPH_CACHE_TTL_MS });
+        return graphData;
+    } catch (err) {
+        const cached = ROAD_GRAPH_CACHE.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.graphData;
+        }
+        throw err;
+    }
 }
 
 function nearestNode(nodes, point) {
