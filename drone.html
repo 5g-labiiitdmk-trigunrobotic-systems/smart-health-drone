@@ -202,19 +202,166 @@
             gap: 15px;
         }
         
-        .simulation-time {
-            background: #f0f2f5;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid var(--accent);
-        }
-        
         .time-icon {
             color: var(--accent-text);
+        }
+
+        /* Pill-style header controls (clock, emergency call, simulation,
+           video call, home, logout) -- icon badge + stacked label/sublabel
+           + trailing chevron, on a soft tinted pill background. */
+        .pill-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px 8px 8px;
+            border-radius: 16px;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .pill-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+        }
+
+        .pill-control:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .pill-control:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .pill-icon-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+
+        .pill-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.25;
+        }
+
+        .pill-text-main {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .pill-text-sub {
+            font-size: 0.75rem;
+            font-weight: 500;
+            opacity: 0.85;
+        }
+
+        .pill-chevron {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.06);
+            font-size: 0.7rem;
+            margin-left: 4px;
+        }
+
+        .simulation-time {
+            background: #ffffff;
+            border: 1px solid #edf1f5;
+        }
+
+        .pill-icon-time {
+            background: #d9f2ee;
+            color: var(--success);
+        }
+
+        .pill-status-online {
+            color: #2a9d3f;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .pill-status-online i {
+            font-size: 0.45rem;
+        }
+
+        .pill-danger {
+            background: linear-gradient(135deg, #ff8f6b, var(--danger));
+            color: white;
+        }
+
+        .pill-danger .pill-icon-badge {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+
+        .pill-danger .pill-text-sub {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .pill-danger .pill-chevron {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+
+        .pill-success {
+            background: #e3f6f2;
+            color: var(--success);
+        }
+
+        .pill-success .pill-icon-badge {
+            background: #ffffff;
+            color: var(--success);
+        }
+
+        .pill-success .pill-text-sub {
+            color: var(--success);
+        }
+
+        .pill-primary {
+            background: #e5edfb;
+            color: var(--secondary);
+        }
+
+        .pill-primary .pill-icon-badge {
+            background: #ffffff;
+            color: var(--secondary);
+        }
+
+        .pill-primary .pill-text-sub {
+            color: var(--secondary);
+        }
+
+        .pill-secondary {
+            background: #eef1f5;
+            color: #1a1a1a;
+        }
+
+        .pill-secondary .pill-icon-badge {
+            background: #ffffff;
+            color: var(--secondary);
+        }
+
+        .pill-logout {
+            background: #fbe9ec;
+            color: var(--primary);
+        }
+
+        .pill-logout .pill-icon-badge {
+            background: #ffffff;
+            color: var(--primary);
         }
         
         /* Sidebar Styles */
@@ -1106,7 +1253,7 @@
 
             /* Keep every tappable control at (or above) the ~44px touch
                target guideline once we're at tablet width or narrower. */
-            .btn, .map-btn, #autonomous-mode-toggle {
+            .btn, .pill-control, .map-btn, #autonomous-mode-toggle {
                 min-height: 44px;
             }
 
@@ -1190,12 +1337,9 @@
                 flex-wrap: wrap;
             }
 
-            .header-controls .btn {
+            .header-controls .pill-control {
                 flex: 1;
                 min-width: 140px;
-                justify-content: center;
-                font-size: 0.85rem;
-                padding: 10px 12px;
             }
 
             .main-content {
@@ -1246,7 +1390,7 @@
                 font-size: 0.85rem;
             }
 
-            .header-controls .btn {
+            .header-controls .pill-control {
                 min-width: unset;
                 width: 100%;
             }
@@ -1281,27 +1425,53 @@
 </div>
 </div>
 <div class="header-controls">
-<div class="simulation-time">
-<i class="fas fa-clock time-icon"></i>
-<span id="sim-time">12:45:30</span>
+<div class="simulation-time pill-control">
+<span class="pill-icon-badge pill-icon-time"><i class="fas fa-clock"></i></span>
+<span class="pill-text">
+<span class="pill-text-main" id="sim-time">12:45:30</span>
+<span class="pill-text-sub pill-status-online"><i class="fas fa-circle"></i> System Online</span>
+</span>
 </div>
 <!-- Emergency Call Button -->
-<button class="btn btn-danger" id="trigger-emergency">
-<i class="fas fa-phone-volume"></i> 108 Emergency Call
+<button class="pill-control pill-danger" id="trigger-emergency">
+<span class="pill-icon-badge pill-icon-danger"><i class="fas fa-phone-volume"></i></span>
+<span class="pill-text">
+<span class="pill-text-main">108</span>
+<span class="pill-text-sub">Emergency Call</span>
+</span>
+<span class="pill-chevron"><i class="fas fa-chevron-right"></i></span>
 </button>
 <!-- Start Simulation Button -->
-<button class="btn btn-success" id="start-sim" disabled>
-<i class="fas fa-play"></i> Start Simulation
+<button class="pill-control pill-success" id="start-sim" disabled>
+<span class="pill-icon-badge pill-icon-success"><i class="fas fa-play"></i></span>
+<span class="pill-text">
+<span class="pill-text-main">Start</span>
+<span class="pill-text-sub">Simulation</span>
+</span>
+<span class="pill-chevron"><i class="fas fa-chevron-right"></i></span>
 </button>
 <!-- Video Call Button -->
-<button class="btn btn-primary" id="start-video-call">
-<i class="fas fa-video"></i> Video Call Doctor
+<button class="pill-control pill-primary" id="start-video-call">
+<span class="pill-icon-badge pill-icon-primary"><i class="fas fa-video"></i></span>
+<span class="pill-text">
+<span class="pill-text-main">Video Call</span>
+<span class="pill-text-sub">Doctor</span>
+</span>
+<span class="pill-chevron"><i class="fas fa-chevron-right"></i></span>
 </button>
-<a href="/" class="btn btn-secondary" id="homeBtn" style="text-decoration: none;">
-<i class="fas fa-home"></i> Home
+<a href="/" class="pill-control pill-secondary" id="homeBtn" style="text-decoration: none;">
+<span class="pill-icon-badge pill-icon-secondary"><i class="fas fa-home"></i></span>
+<span class="pill-text">
+<span class="pill-text-main">Home</span>
+</span>
+<span class="pill-chevron"><i class="fas fa-chevron-right"></i></span>
 </a>
-<button class="btn btn-danger" id="logoutBtn">
-<i class="fas fa-sign-out-alt"></i> Logout
+<button class="pill-control pill-logout" id="logoutBtn">
+<span class="pill-icon-badge pill-icon-logout"><i class="fas fa-sign-out-alt"></i></span>
+<span class="pill-text">
+<span class="pill-text-main">Logout</span>
+</span>
+<span class="pill-chevron"><i class="fas fa-chevron-right"></i></span>
 </button>
 </div>
 </header>
