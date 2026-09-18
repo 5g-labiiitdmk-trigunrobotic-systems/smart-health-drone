@@ -254,7 +254,16 @@ app.get('/api/doctors', async (req, res) => {
 
 app.get('/api/drones', async (req, res) => {
     const users = (await db.loadUsers()).map(toPublicUser).filter(u => u.userType === 'drone_operator');
-    res.json({ users });
+    // Live status so the doctor's "Select Drone & Launch" panel can offer
+    // only operators who are actually connected right now, and flag ones
+    // already mid-mission so a doctor doesn't double-assign the same drone.
+    const assignedDroneIds = new Set(Object.values(activeConnections).map(c => c.droneUserId).filter(Boolean));
+    const withStatus = users.map(u => ({
+        ...u,
+        online: onlineUsers.get(u.userId)?.role === 'drone_operator',
+        assigned: assignedDroneIds.has(u.userId)
+    }));
+    res.json({ users: withStatus });
 });
 
 // --- Video calls: PeerJS (direct browser-to-browser WebRTC) ---
@@ -916,6 +925,86 @@ io.on('connection', (socket) => {
         io.to(request.socketId).emit('assignedDoctor', connection);
         io.emit('pendingRequestsUpdated', Object.values(pendingRequests));
         io.emit('currentConnectionStatus', Object.values(activeConnections));
+
+        if (typeof callback === 'function') {
+            callback({ connection });
+        }
+    });
+
+    // --- Doctor-initiated assignment: the doctor picks a specific online ---
+    // --- drone operator and launches them directly, instead of waiting ---
+    // --- for that operator to self-raise a request via 'requestEmergency'. ---
+    // The old pendingRequests/acceptRequest path above is left in place
+    // as a fallback for operator-initiated self-service requests; this is
+    // now the primary path.
+    socket.on('doctorAssignAndLaunch', async ({ doctorUserId, doctorName, droneUserId, location, incidentDetails } = {}, callback) => {
+        if (!droneUserId) {
+            if (typeof callback === 'function') callback({ error: 'Select a drone operator to assign.' });
+            return;
+        }
+
+        // Route to the exact drone operator's socket via the same
+        // userId -> socketId lookup ('identify') that room isolation
+        // already relies on elsewhere, rather than broadcasting.
+        const target = onlineUsers.get(droneUserId);
+        if (!target || target.role !== 'drone_operator') {
+            if (typeof callback === 'function') callback({ error: 'That drone operator is not currently online.' });
+            return;
+        }
+        const droneSocket = io.sockets.sockets.get(target.socketId);
+        if (!droneSocket) {
+            if (typeof callback === 'function') callback({ error: 'That drone operator is not currently online.' });
+            return;
+        }
+
+        const users = await db.loadUsers();
+        const droneUser = users.find(u => u.userId === droneUserId);
+        const operatorName = droneUser ? droneUser.name : droneUserId;
+
+        const roomId = uuidv4();
+        const connection = {
+            role: 'assigned',
+            roomId,
+            doctorName: doctorName || doctorUserId,
+            doctorUserId,
+            operatorName,
+            droneUserId
+        };
+        activeConnections[roomId] = connection;
+
+        // Put both sides of the pairing into the shared room up front --
+        // the doctor's own socket and the target drone's socket -- so GPS
+        // and video are scoped correctly from the very first frame.
+        socket.join(roomId);
+        droneSocket.join(roomId);
+
+        const now = Date.now();
+        await db.appendEmergencyLog({
+            id: uuidv4(),
+            roomId,
+            droneUserId,
+            operatorName,
+            location: location || null,
+            doctorUserId: doctorUserId || null,
+            doctorName: doctorName || doctorUserId || null,
+            status: 'assigned',
+            // This case is created already-assigned (no pending stage), so
+            // createdAt and assignedAt both reflect the doctor's action.
+            createdAt: now,
+            assignedAt: now,
+            resolvedAt: null
+        });
+
+        io.to(target.socketId).emit('droneLaunchCommand', {
+            roomId,
+            doctorName: doctorName || doctorUserId,
+            doctorUserId,
+            location: location || null,
+            incidentDetails: incidentDetails || null
+        });
+        io.emit('currentConnectionStatus', Object.values(activeConnections));
+
+        console.log(`Doctor ${doctorName || doctorUserId} assigned & launched drone ${operatorName} (${droneUserId}) in room ${roomId}`);
 
         if (typeof callback === 'function') {
             callback({ connection });

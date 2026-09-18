@@ -476,6 +476,30 @@
         </div>
     </header>
 
+    <section class="assign-launch-section" style="
+        background: #ffffff;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 15px 20px;
+    ">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
+            <i class="fas fa-satellite-dish" style="color: var(--primary);"></i>
+            <strong>Select Drone &amp; Launch</strong>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <select id="assign-drone-select" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem; min-width:220px;">
+                <option value="">Loading available drones…</option>
+            </select>
+            <input type="text" id="assign-incident-details" placeholder="Incident details (optional)" style="flex:1; min-width:200px; padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
+            <button id="assign-launch-btn" style="padding:8px 18px; border:none; border-radius:8px; background: var(--success); color:#fff; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:8px;" disabled>
+                <i class="fas fa-paper-plane"></i> Assign &amp; Launch Drone
+            </button>
+            <button id="refresh-drones-btn" title="Refresh drone list" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color: var(--accent-text); cursor:pointer;">
+                <i class="fas fa-rotate"></i>
+            </button>
+        </div>
+        <p id="assign-drone-empty-note" style="display:none; color: var(--accent-text); opacity:0.8; margin-top:8px;">No drone operators are currently online and available.</p>
+    </section>
+
     <section class="pending-requests-section" style="
         background: #ffffff;
         border-bottom: 1px solid #e0e0e0;
@@ -484,6 +508,7 @@
         <div style="display:flex; align-items:center; gap:10px; margin-bottom: 10px;">
             <i class="fas fa-bell" style="color: var(--warning-text);"></i>
             <strong>Pending Emergency Requests</strong>
+            <span style="font-size:0.8rem; color: var(--accent-text); opacity:0.8; font-weight:normal;">(operator self-initiated, fallback path)</span>
         </div>
         <div id="pending-requests-list" style="display:flex; flex-wrap:wrap; gap:12px;">
             <p style="color: var(--accent-text); opacity:0.8;">No pending requests right now.</p>
@@ -672,29 +697,106 @@
             });
         }
 
+        // Shared by both assignment paths (doctor-initiated launch and the
+        // operator-initiated accept-a-request fallback) -- once a
+        // connection object comes back from the server, the doctor's UI
+        // reacts identically regardless of which side triggered it.
+        function activateConnection(connection, logMessage) {
+            myRoomId = connection.roomId;
+            localStorage.setItem('currentConnection', JSON.stringify(connection));
+            socket.emit('join', myRoomId);
+
+            droneName = connection.operatorName;
+            doctorHeaderName.textContent = `${doctorName} Interface`;
+            videoCallTitleText.textContent = `Video Call with ${droneName}`;
+
+            addLogEntry(logMessage, 'success');
+
+            // myRoomId is now the real shared room with this drone --
+            // safe to join the video call (startCall() no-ops if this
+            // doctor was still on the private "solo_" room before).
+            startCall();
+        }
+
         function acceptRequest(roomId) {
             socket.emit('acceptRequest', { roomId, doctorUserId: myUserId, doctorName }, (result) => {
                 if (result && result.error) {
                     alert(result.error);
                     return;
                 }
-                const connection = result.connection;
-                myRoomId = connection.roomId;
-                localStorage.setItem('currentConnection', JSON.stringify(connection));
-                socket.emit('join', myRoomId);
-
-                droneName = connection.operatorName;
-                doctorHeaderName.textContent = `${doctorName} Interface`;
-                videoCallTitleText.textContent = `Video Call with ${droneName}`;
-
-                addLogEntry(`Accepted emergency call from ${droneName}. Now receiving their live GPS and video feed.`, 'success');
-
-                // myRoomId is now the real shared room with this drone --
-                // safe to join the video call (startCall() no-ops if this
-                // doctor was still on the private "solo_" room before).
-                startCall();
+                activateConnection(result.connection, `Accepted emergency call from ${result.connection.operatorName}. Now receiving their live GPS and video feed.`);
             });
         }
+
+        // --- Doctor-initiated assignment (primary flow) ---
+        // Lists currently online, unassigned drone operators pulled from
+        // /api/drones, so the doctor picks a specific unit and launches it
+        // directly rather than waiting for that operator to self-raise a
+        // request in the Pending Requests queue above.
+        const assignDroneSelect = document.getElementById('assign-drone-select');
+        const assignIncidentDetails = document.getElementById('assign-incident-details');
+        const assignLaunchBtn = document.getElementById('assign-launch-btn');
+        const assignDroneEmptyNote = document.getElementById('assign-drone-empty-note');
+
+        async function refreshAvailableDrones() {
+            try {
+                const res = await fetch('/api/drones', { credentials: 'include' });
+                const data = await res.json();
+                const available = (data.users || []).filter(d => d.online && !d.assigned);
+
+                const previouslySelected = assignDroneSelect.value;
+                if (!available.length) {
+                    assignDroneSelect.innerHTML = '<option value="">No drones available</option>';
+                    assignDroneSelect.disabled = true;
+                    assignLaunchBtn.disabled = true;
+                    assignDroneEmptyNote.style.display = 'block';
+                    return;
+                }
+
+                assignDroneEmptyNote.style.display = 'none';
+                assignDroneSelect.disabled = false;
+                assignDroneSelect.innerHTML = '<option value="">Select a drone operator…</option>' +
+                    available.map(d => `<option value="${d.userId}">${d.name}${d.city ? ' — ' + d.city : ''}</option>`).join('');
+                if (available.some(d => d.userId === previouslySelected)) {
+                    assignDroneSelect.value = previouslySelected;
+                }
+                assignLaunchBtn.disabled = !assignDroneSelect.value;
+            } catch (err) {
+                addLogEntry(`Could not load available drones: ${err.message}`, 'error');
+            }
+        }
+
+        assignDroneSelect.addEventListener('change', () => {
+            assignLaunchBtn.disabled = !assignDroneSelect.value;
+        });
+
+        document.getElementById('refresh-drones-btn').addEventListener('click', refreshAvailableDrones);
+
+        assignLaunchBtn.addEventListener('click', () => {
+            const droneUserId = assignDroneSelect.value;
+            if (!droneUserId) return;
+
+            assignLaunchBtn.disabled = true;
+            socket.emit('doctorAssignAndLaunch', {
+                doctorUserId: myUserId,
+                doctorName,
+                droneUserId,
+                incidentDetails: assignIncidentDetails.value.trim() || null
+            }, (result) => {
+                if (result && result.error) {
+                    alert(result.error);
+                    assignLaunchBtn.disabled = false;
+                    return;
+                }
+                activateConnection(result.connection, `Assigned and launched ${result.connection.operatorName}. Now receiving their live GPS and video feed.`);
+                assignIncidentDetails.value = '';
+                refreshAvailableDrones();
+            });
+        });
+
+        refreshAvailableDrones();
+        setInterval(refreshAvailableDrones, 15000);
+        socket.on('currentConnectionStatus', refreshAvailableDrones);
 
         // --- Text message to drone (spoken aloud there via TTS) ---
         const doctorMessageInput = document.getElementById('doctor-message-input');

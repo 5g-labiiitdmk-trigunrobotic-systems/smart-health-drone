@@ -1612,6 +1612,10 @@
 <div class="iiit-logo">
 <i class="fas fa-university"></i>
 </div>
+<div id="remote-launch-banner" style="display:none; position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1200; background:linear-gradient(135deg, #ff8f6b, var(--danger)); color:#fff; padding:12px 22px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); font-weight:600; display:flex; align-items:center; gap:10px; max-width:90%; text-align:center;">
+<i class="fas fa-satellite-dish"></i>
+<span id="remote-launch-banner-text">Dispatched by doctor — mission starting</span>
+</div>
 <div class="gps-indicator" id="gps-indicator">
 <i class="fas fa-satellite gps-icon"></i>
 <span>Acquiring GPS...</span>
@@ -1892,14 +1896,26 @@
         // a per-tab random id so testing without going through the portal
         // doesn't accidentally join a shared/global room.
         let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
+        const myUserId = localStorage.getItem('myUserId') || null;
 
         // Join this pairing's own room instead of a hardcoded global one, so
         // GPS/video data never crosses over between simultaneous drone/doctor pairs.
         const joinMyRoom = () => socket.emit('join', myRoomId);
+        // Identifies this socket to the server as a specific drone operator
+        // userId, so a doctor's "Assign & Launch" action can target this
+        // exact socket instead of broadcasting (same lookup the doctor-side
+        // accept-a-request flow already uses for room isolation).
+        const identifySelf = () => {
+            if (myUserId) socket.emit('identify', { userId: myUserId, role: 'drone_operator' });
+        };
         if (socket.connected) {
             joinMyRoom();
+            identifySelf();
         }
-        socket.on('connect', joinMyRoom);
+        socket.on('connect', () => {
+            joinMyRoom();
+            identifySelf();
+        });
 
         // --- Real Drone Mode: hardware telemetry ingestion ---
         // Toggles between the existing simulated flight and live hardware
@@ -3023,6 +3039,74 @@
             } else {
                 alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
             }
+        });
+
+        // --- Doctor-initiated launch (new primary flow) ---
+        // A doctor selecting this drone from their "Select Drone & Launch"
+        // panel arrives here as 'droneLaunchCommand', targeted specifically
+        // at this socket via the 'identify' registration above. Rather than
+        // waiting for the operator to click Deploy manually, this replays
+        // the same startSimulation()/deployDrone() sequence the manual 108
+        // button already used, so the two trigger paths behave identically
+        // once a mission is underway -- the operator can still use manual
+        // overrides afterward (Deploy Drone, Autonomous Mode) mid-mission.
+        function showRemoteLaunchBanner(launchedByDoctorName) {
+            const banner = document.getElementById('remote-launch-banner');
+            const bannerText = document.getElementById('remote-launch-banner-text');
+            bannerText.textContent = `Dispatched by Dr. ${launchedByDoctorName || 'Unknown'} — mission starting`;
+            banner.style.display = 'flex';
+            clearTimeout(showRemoteLaunchBanner._hideTimer);
+            showRemoteLaunchBanner._hideTimer = setTimeout(() => {
+                banner.style.display = 'none';
+            }, 8000);
+        }
+
+        socket.on('droneLaunchCommand', (data = {}) => {
+            const { roomId, doctorName: launchDoctorName, location, incidentDetails } = data;
+
+            if (roomId) {
+                myRoomId = roomId;
+                socket.emit('join', myRoomId);
+                const connection = {
+                    role: 'droneOperator',
+                    roomId,
+                    doctorName: launchDoctorName,
+                    operatorName: droneOperatorName,
+                    droneUserId: myUserId
+                };
+                localStorage.setItem('currentConnection', JSON.stringify(connection));
+                doctorName = launchDoctorName || doctorName;
+                videoCallHeaderText.textContent = `Video Call with ${doctorName}`;
+            }
+            if (location) {
+                lastKnownLocation = location;
+            }
+
+            showRemoteLaunchBanner(launchDoctorName);
+            addLogEntry(
+                `🚁 Remote launch command received from Dr. ${launchDoctorName || 'Unknown'}` +
+                (incidentDetails ? ` — ${incidentDetails}` : '') + '.',
+                'alert'
+            );
+
+            // Mirrors the manual 108 Emergency Call handler's own timing
+            // below, so the drone side behaves the same whether the mission
+            // was raised locally or launched remotely by a doctor.
+            requestLocation();
+            setTimeout(() => {
+                addLogEntry('🛫 Dispatching drone to accident site (remote launch)...', 'info');
+                startSimulation();
+
+                setTimeout(() => {
+                    deployDrone();
+
+                    setTimeout(() => {
+                        document.getElementById("doctor-monitoring").style.display = "block";
+                        addLogEntry('📡 Live feed sent to doctor. Monitoring patient condition...', 'info');
+                        playVoiceAlert();
+                    }, 5000);
+                }, 3000);
+            }, 2000);
         });
 
         document.getElementById("doctor-close-panel").addEventListener("click", function () {
