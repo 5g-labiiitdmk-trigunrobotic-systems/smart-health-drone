@@ -86,7 +86,17 @@ function appendAuditLog({ adminUserId, action, details }) {
     });
 }
 
-// Serve static files
+// Serve static files. HTML pages here change frequently across deploys and
+// have caused real confusion where a fix was live on the server but a
+// browser kept rendering a stale cached copy of drone.html/doctor.html/etc
+// -- explicitly disable caching for HTML so a normal reload always gets the
+// current version; other static assets keep express.static's defaults.
+app.use((req, res, next) => {
+    if (req.path === '/' || req.path.endsWith('.html')) {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+    next();
+});
 app.use(express.static(__dirname));
 app.use(express.json());
 app.use(cookieParser());
