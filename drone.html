@@ -1906,6 +1906,14 @@
         // Launch panel despite being connected). Re-read it lazily instead.
         let myUserId = localStorage.getItem('myUserId') || null;
 
+        // A quick, cheap way to tell from the console log alone whether
+        // this tab is actually running the latest deployed JS, rather than
+        // a page loaded before a fix shipped and simply never reloaded
+        // since (a real reload always gets fresh HTML now -- see the
+        // Cache-Control fix in server.js -- but nothing forces a tab that
+        // was opened before a deploy and just left open to pick it up).
+        addLogEntry(`Build check: drone.html loaded at ${new Date().toLocaleTimeString()} (remote-launch route-wait + auto video-answer + mission-reset build).`, 'info');
+
         // Join this pairing's own room instead of a hardcoded global one, so
         // GPS/video data never crosses over between simultaneous drone/doctor pairs.
         const joinMyRoom = () => socket.emit('join', myRoomId);
