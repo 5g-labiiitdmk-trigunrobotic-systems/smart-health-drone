@@ -596,7 +596,14 @@
         // per-tab random id so testing without going through the portal
         // doesn't accidentally join a shared/global room.
         let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
-        const myUserId = localStorage.getItem('myUserId') || null;
+        // NOT a one-shot read: the auth-gate script at the top of <head>
+        // sets localStorage.myUserId asynchronously (it awaits a fetch to
+        // /api/me), and this script block can run before that fetch
+        // resolves -- capturing this as a `const` here could silently lock
+        // in `null` for doctorUserId on every request/assignment this
+        // doctor makes. Re-read it lazily instead (see the identical fix
+        // in drone.html for the operator side).
+        let myUserId = localStorage.getItem('myUserId') || null;
 
         if (currentConnection && currentConnection.role === 'doctor') {
             doctorName = currentConnection.doctorName;
@@ -653,14 +660,30 @@
         // --- Socket.IO for GPS Sync ---
         // Joins this pairing's own room instead of a hardcoded global one, so
         // GPS data from other simultaneous drone/doctor pairs never crosses over.
+        const identifySelf = () => {
+            myUserId = localStorage.getItem('myUserId') || myUserId;
+            if (myUserId) {
+                socket.emit('identify', { userId: myUserId, role: 'doctor' });
+            }
+        };
+
         socket.on('connect', () => {
             addLogEntry('Connected to signaling server.', 'info');
             socket.emit('join', myRoomId);
             addLogEntry(`Joined room: ${myRoomId}`, 'info');
-            if (myUserId) {
-                socket.emit('identify', { userId: myUserId, role: 'doctor' });
-            }
+            identifySelf();
         });
+        // The auth-gate fetch can resolve after this script has already run
+        // (and after 'connect' has already fired), so myUserId may still be
+        // null at that point. Keep retrying briefly until it's available.
+        const identifyRetryInterval = setInterval(() => {
+            if (myUserId) {
+                clearInterval(identifyRetryInterval);
+                return;
+            }
+            identifySelf();
+        }, 500);
+        setTimeout(() => clearInterval(identifyRetryInterval), 15000);
 
         // --- Call Assignment (Feature #3) ---
         // Rather than any doctor being able to join any drone's call, an
