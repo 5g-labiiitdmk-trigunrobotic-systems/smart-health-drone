@@ -1941,6 +1941,18 @@
             joinMyRoom();
             identifySelf();
         });
+        // Visibility into exactly the kind of cross-network flakiness the
+        // whole online/offline mechanism depends on -- a silent disconnect
+        // or a failed websocket upgrade falling back to long-polling
+        // previously left no trace in this console, making "did it
+        // actually reconnect and re-identify" impossible to tell from a
+        // bug report alone.
+        socket.on('disconnect', (reason) => {
+            addLogEntry(`Disconnected from server (${reason}). Reconnecting...`, 'alert');
+        });
+        socket.on('connect_error', (err) => {
+            addLogEntry(`Connection error: ${err.message}`, 'error');
+        });
         // The auth-gate fetch can resolve after this script has already run
         // (and after 'connect' has already fired), so myUserId may still be
         // null at both of the call sites above. Keep retrying briefly until

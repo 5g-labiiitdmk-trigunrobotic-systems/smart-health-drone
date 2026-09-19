@@ -677,6 +677,24 @@
             socket.emit('join', myRoomId);
             addLogEntry(`Joined room: ${myRoomId}`, 'info');
             identifySelf();
+            // A reconnect (network blip, switching networks, this tab's
+            // own socket dropping) can miss a 'droneAvailabilityChanged'
+            // broadcast that happened while disconnected -- previously
+            // this would only self-correct up to 15s later on the
+            // periodic poll below. Re-sync immediately instead.
+            refreshAvailableDrones();
+        });
+        // Visibility into exactly the kind of cross-network flakiness this
+        // whole identify/availability mechanism depends on -- a silent
+        // disconnect or a failed websocket upgrade falling back to
+        // long-polling previously left no trace in this console at all,
+        // making "is it actually reconnecting" impossible to tell from a
+        // bug report alone.
+        socket.on('disconnect', (reason) => {
+            addLogEntry(`Disconnected from signaling server (${reason}). Reconnecting...`, 'alert');
+        });
+        socket.on('connect_error', (err) => {
+            addLogEntry(`Connection error: ${err.message}`, 'error');
         });
         // The auth-gate fetch can resolve after this script has already run
         // (and after 'connect' has already fired), so myUserId may still be
