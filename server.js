@@ -86,6 +86,25 @@ function appendAuditLog({ adminUserId, action, details }) {
     });
 }
 
+// Clears the persisted "busy" marker on a drone operator's own record once
+// its mission ends (call completed/reset, or the operator disconnects).
+// Best-effort: the authoritative guard against double-booking is the
+// in-memory activeConnections check in doctorAssignAndLaunch, which is
+// always correct for this process regardless of whether this persisted
+// mirror update succeeds.
+async function clearDroneBusyState(droneUserId) {
+    if (!droneUserId) return;
+    try {
+        const droneUser = await db.getUser(droneUserId);
+        if (droneUser && droneUser.activeAssignment) {
+            droneUser.activeAssignment = null;
+            await db.upsertUser(droneUser);
+        }
+    } catch (err) {
+        console.error(`Failed to clear busy state for drone ${droneUserId}:`, err.message);
+    }
+}
+
 // Serve static files. HTML pages here change frequently across deploys and
 // have caused real confusion where a fix was live on the server but a
 // browser kept rendering a stale cached copy of drone.html/doctor.html/etc
@@ -127,11 +146,6 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Missing required registration fields.' });
         }
 
-        const users = await db.loadUsers();
-        if (users.some(u => u.userId === userId)) {
-            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-        }
-
         const passwordHash = await bcrypt.hash(password, 10);
 
         const newUser = {
@@ -164,8 +178,15 @@ app.post('/api/register', async (req, res) => {
             newUser.country = country || '';
         }
 
-        users.push(newUser);
-        await db.saveUsers(users);
+        // Atomic insert-only create: rejects with null if this userId was
+        // concurrently claimed between two requests, rather than the old
+        // separate "load, check, push, save-everything" sequence where two
+        // near-simultaneous registrations could both pass the check and one
+        // would silently overwrite the other.
+        const created = await db.createUser(newUser);
+        if (!created) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
 
         // Let any connected admin panel show a live "new registration" badge
         // without needing to refresh or poll.
@@ -415,18 +436,23 @@ app.post('/api/admin/setup', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 8 characters.' });
         }
 
+        // This "is there already an admin" check is a whole-collection read
+        // rather than a single-row operation, so it keeps a narrow TOCTOU
+        // window -- acceptable here since this one-time bootstrap endpoint
+        // is a human clicking through initial setup once, not a path
+        // exposed to real concurrent traffic the way registration/approval
+        // are. The userId-uniqueness + insert below is still fully atomic.
         const users = await db.loadUsers();
         if (users.some(u => u.userType === 'admin')) {
             return res.status(403).json({ error: 'An admin account already exists. Setup is one-time only.' });
         }
-        if (users.some(u => u.userId === userId)) {
-            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-        }
 
         const passwordHash = await bcrypt.hash(password, 10);
         const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
-        users.push(newAdmin);
-        await db.saveUsers(users);
+        const created = await db.createUser(newAdmin);
+        if (!created) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
 
         await appendAuditLog({ adminUserId: userId, action: 'admin_account_created', details: { via: 'initial_setup' } });
 
@@ -506,15 +532,12 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 8 characters.' });
         }
 
-        const users = await db.loadUsers();
-        if (users.some(u => u.userId === userId)) {
-            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
-        }
-
         const passwordHash = await bcrypt.hash(password, 10);
         const newAdmin = { name, userId, email, userType: 'admin', passwordHash, status: 'active', createdAt: Date.now() };
-        users.push(newAdmin);
-        await db.saveUsers(users);
+        const created = await db.createUser(newAdmin);
+        if (!created) {
+            return res.status(409).json({ error: 'User ID already taken. Please choose a different one.' });
+        }
 
         await appendAuditLog({ adminUserId: req.adminUserId, action: 'admin_account_created', details: { createdUserId: userId } });
 
@@ -552,14 +575,17 @@ app.get('/api/admin/pending-users', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/users/:userId/approve', requireAdmin, async (req, res) => {
-    const users = await db.loadUsers();
-    const user = users.find(u => u.userId === req.params.userId);
+    // Single-row read + write -- an admin approving/rejecting one account
+    // no longer touches (or can be clobbered by) any other account's
+    // concurrent write, unlike the old load-everything/save-everything
+    // pattern.
+    const user = await db.getUser(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.status !== 'pending') {
         return res.status(400).json({ error: 'This account is not awaiting approval.' });
     }
     user.status = 'active';
-    await db.saveUsers(users);
+    await db.upsertUser(user);
 
     await appendAuditLog({
         adminUserId: req.adminUserId,
@@ -571,14 +597,13 @@ app.post('/api/admin/users/:userId/approve', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/users/:userId/reject', requireAdmin, async (req, res) => {
-    const users = await db.loadUsers();
-    const user = users.find(u => u.userId === req.params.userId);
+    const user = await db.getUser(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (user.status !== 'pending') {
         return res.status(400).json({ error: 'This account is not awaiting approval.' });
     }
     user.status = 'rejected';
-    await db.saveUsers(users);
+    await db.upsertUser(user);
 
     await appendAuditLog({
         adminUserId: req.adminUserId,
@@ -599,17 +624,17 @@ app.get('/api/admin/connections', requireAdmin, (req, res) => {
 });
 
 app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
-    const users = await db.loadUsers();
-    const idx = users.findIndex(u => u.userId === req.params.userId);
-    if (idx === -1) {
+    const target = await db.getUser(req.params.userId);
+    if (!target) {
         return res.status(404).json({ error: 'User not found.' });
     }
-    const removed = users[idx];
-    if (removed.userType === 'admin') {
+    if (target.userType === 'admin') {
         return res.status(400).json({ error: 'Admin accounts cannot be removed from this endpoint.' });
     }
-    users.splice(idx, 1);
-    await db.saveUsers(users);
+    const removed = await db.deleteUser(req.params.userId);
+    if (!removed) {
+        return res.status(404).json({ error: 'User not found.' });
+    }
 
     const online = onlineUsers.get(req.params.userId);
     if (online) {
@@ -634,9 +659,8 @@ app.delete('/api/admin/users/:userId', requireAdmin, async (req, res) => {
 // Mirrors the validation registration already performs, and never allows
 // userId/userType/passwordHash to be changed through this endpoint.
 async function updateUserDetails(req, res, expectedUserType) {
-    const users = await db.loadUsers();
-    const idx = users.findIndex(u => u.userId === req.params.userId && u.userType === expectedUserType);
-    if (idx === -1) {
+    const user = await db.getUser(req.params.userId);
+    if (!user || user.userType !== expectedUserType) {
         return res.status(404).json({ error: `${expectedUserType === 'doctor' ? 'Doctor' : 'Drone operator'} not found.` });
     }
 
@@ -652,7 +676,6 @@ async function updateUserDetails(req, res, expectedUserType) {
         return res.status(400).json({ error: 'Phone cannot be empty.' });
     }
 
-    const user = users[idx];
     if (name !== undefined) user.name = name;
     if (email !== undefined) user.email = email;
     if (phone !== undefined) user.phone = phone;
@@ -675,7 +698,7 @@ async function updateUserDetails(req, res, expectedUserType) {
         user.passwordHash = await bcrypt.hash(password, 10);
     }
 
-    await db.saveUsers(users);
+    await db.upsertUser(user);
 
     const changedFields = Object.keys(req.body || {}).filter(k => k !== 'password');
     await appendAuditLog({
@@ -828,6 +851,7 @@ io.on('connection', (socket) => {
     // --- Handle Connection Reset from Clients ---
     socket.on('resetConnection', async (roomId) => {
         if (roomId && activeConnections[roomId]) {
+            const { droneUserId } = activeConnections[roomId];
             delete activeConnections[roomId];
             // An assigned pairing being reset is how this system represents
             // a completed mission -- log it as such rather than letting the
@@ -836,15 +860,19 @@ io.on('connection', (socket) => {
                 status: 'completed',
                 resolvedAt: Date.now()
             });
+            await clearDroneBusyState(droneUserId);
             console.log(`Connection ${roomId} reset by a client.`);
         } else {
+            const droneUserIds = Object.values(activeConnections).map(c => c.droneUserId).filter(Boolean);
             for (const id of Object.keys(activeConnections)) {
                 await db.updateEmergencyLogByRoom(id, ['assigned'], { status: 'completed', resolvedAt: Date.now() });
             }
             activeConnections = {};
+            await Promise.all(droneUserIds.map(clearDroneBusyState));
             console.log('All connections reset by a client.');
         }
         io.emit('currentConnectionStatus', Object.values(activeConnections));
+        io.emit('droneAvailabilityChanged');
     });
 
     // --- GPS Data Sync (scoped to the pairing's own room) ---
@@ -974,26 +1002,44 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const users = await db.loadUsers();
-        const droneUser = users.find(u => u.userId === droneUserId);
-        const operatorName = droneUser ? droneUser.name : droneUserId;
-
+        // Busy check-and-reserve, done synchronously (no `await` between
+        // the check and the activeConnections write below) so it's atomic
+        // with respect to every other socket event handler -- Node's
+        // single-threaded event loop can't interleave another
+        // 'doctorAssignAndLaunch' call in between these two lines. This is
+        // what actually closes the race a stress test found: 10 doctors
+        // hitting the same drone at once all succeeded and created 10
+        // separate rooms for one physical drone, because this check simply
+        // didn't exist before -- it wasn't just a narrow timing window, the
+        // handler never verified the target wasn't already on a mission at
+        // all, concurrently or otherwise.
+        const alreadyBusy = Object.values(activeConnections).some(c => c.droneUserId === droneUserId);
+        if (alreadyBusy) {
+            if (typeof callback === 'function') callback({ error: 'This drone is already on an active mission.' });
+            return;
+        }
         const roomId = uuidv4();
         const connection = {
             role: 'assigned',
             roomId,
             doctorName: doctorName || doctorUserId,
             doctorUserId,
-            operatorName,
+            operatorName: droneUserId, // patched below once the user record is loaded
             droneUserId
         };
-        activeConnections[roomId] = connection;
+        activeConnections[roomId] = connection; // reservation -- still synchronous, no await above this point
 
         // Put both sides of the pairing into the shared room up front --
         // the doctor's own socket and the target drone's socket -- so GPS
         // and video are scoped correctly from the very first frame.
         socket.join(roomId);
         droneSocket.join(roomId);
+
+        // Everything below is async and safe to interleave with other
+        // requests now, since the slot for this drone is already reserved.
+        const droneUser = await db.getUser(droneUserId);
+        const operatorName = droneUser ? droneUser.name : droneUserId;
+        connection.operatorName = operatorName;
 
         const now = Date.now();
         await db.appendEmergencyLog({
@@ -1012,6 +1058,17 @@ io.on('connection', (socket) => {
             resolvedAt: null
         });
 
+        // Persist the busy state onto the drone's own record too (durable,
+        // visible from /api/admin/users) -- the actual race guard above is
+        // the in-memory activeConnections reservation, which is always
+        // correct and available for this process; this is a best-effort
+        // mirror of that state for display/audit purposes and survives
+        // this process's own view being asked about later.
+        if (droneUser) {
+            droneUser.activeAssignment = { roomId, doctorUserId, assignedAt: now };
+            await db.upsertUser(droneUser);
+        }
+
         io.to(target.socketId).emit('droneLaunchCommand', {
             roomId,
             doctorName: doctorName || doctorUserId,
@@ -1020,6 +1077,7 @@ io.on('connection', (socket) => {
             incidentDetails: incidentDetails || null
         });
         io.emit('currentConnectionStatus', Object.values(activeConnections));
+        io.emit('droneAvailabilityChanged');
 
         console.log(`Doctor ${doctorName || doctorUserId} assigned & launched drone ${operatorName} (${droneUserId}) in room ${roomId}`);
 
@@ -1040,6 +1098,30 @@ io.on('connection', (socket) => {
             const current = onlineUsers.get(socket.data.userId);
             if (current && current.socketId === socket.id) {
                 onlineUsers.delete(socket.data.userId);
+
+                // A drone operator disconnecting mid-mission frees it up
+                // for reassignment rather than leaving it permanently
+                // marked busy for a mission nobody can finish anymore --
+                // an operator's tab crashing shouldn't strand the drone as
+                // unassignable forever.
+                if (current.role === 'drone_operator') {
+                    const droneUserId = socket.data.userId;
+                    const staleRoomIds = Object.entries(activeConnections)
+                        .filter(([, c]) => c.droneUserId === droneUserId)
+                        .map(([roomId]) => roomId);
+                    for (const roomId of staleRoomIds) {
+                        delete activeConnections[roomId];
+                        await db.updateEmergencyLogByRoom(roomId, ['assigned'], {
+                            status: 'operator_disconnected',
+                            resolvedAt: Date.now()
+                        });
+                    }
+                    await clearDroneBusyState(droneUserId);
+                    if (staleRoomIds.length) {
+                        io.emit('currentConnectionStatus', Object.values(activeConnections));
+                    }
+                }
+
                 io.emit('droneAvailabilityChanged');
             }
         }
