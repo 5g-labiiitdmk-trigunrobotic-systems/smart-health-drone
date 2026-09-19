@@ -1889,6 +1889,7 @@
         // hanging up and starting a new one in the same page) can tear
         // down the previous Peer/stream first.
         let videoPeer;
+        let videoPeerRoomId = null;
         let currentVideoCall;
         let localVideoStream;
         // Unique per-pairing room, assigned by the server when this drone
@@ -2858,6 +2859,78 @@
         setInterval(updateSimulationTime, 1000);
 
         // Start video call with doctor
+        // Registers this drone as answerable under the fixed, well-known
+        // Peer ID the doctor's side calls into ('drone_' + roomId). Shared
+        // by the manual "Video Call Doctor" button and by the automatic
+        // paths below (assignedDoctor / droneLaunchCommand) -- a doctor's
+        // side already auto-dials this Peer ID the instant a pairing is
+        // made (see doctor.html's startCall()), so without this running
+        // proactively the doctor is left retrying "Drone has not joined
+        // the call yet" forever unless the operator happens to separately
+        // click this button first.
+        async function ensureVideoPeerReady({ showUI = false } = {}) {
+            if (showUI) {
+                videoCallContainer.style.display = 'flex';
+                callStatusIndicator.style.backgroundColor = 'orange';
+                callStatusText.textContent = 'Connecting...';
+            }
+
+            // Already registered for this exact room -- nothing to do.
+            if (videoPeer && !videoPeer.destroyed && videoPeerRoomId === myRoomId) {
+                return;
+            }
+
+            // Peer IDs are alphanumeric-ish; sanitize to be safe since
+            // myRoomId can be a UUID (hyphens) or "solo_..." (underscore).
+            const peerId = 'drone_' + myRoomId.replace(/[^a-zA-Z0-9_-]/g, '');
+
+            try {
+                localVideoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (err) {
+                addLogEntry(`Camera/microphone access failed: ${err.message}`, 'error');
+                if (showUI) {
+                    callStatusIndicator.style.backgroundColor = 'red';
+                    callStatusText.textContent = 'Disconnected';
+                    videoCallContainer.style.display = 'none';
+                }
+                return;
+            }
+            document.getElementById('local-video').srcObject = localVideoStream;
+
+            // A Peer object can only be used once, so tear down any
+            // previous one before a fresh registration.
+            if (videoPeer) {
+                videoPeer.destroy();
+                videoPeer = undefined;
+            }
+            videoPeer = new Peer(peerId);
+            videoPeerRoomId = myRoomId;
+            videoPeer.on('open', () => {
+                if (showUI) {
+                    callStatusText.textContent = 'Waiting for doctor to join...';
+                }
+                addLogEntry('Video call channel ready — waiting for the doctor to join.', 'info');
+            });
+            videoPeer.on('call', (call) => {
+                currentVideoCall = call;
+                call.answer(localVideoStream);
+                // Surface the call UI even if it was registered headlessly
+                // (a remote launch never showed it), so the operator sees
+                // the moment the doctor actually connects.
+                videoCallContainer.style.display = 'flex';
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('remote-video').srcObject = remoteStream;
+                    callStatusIndicator.style.backgroundColor = 'green';
+                    callStatusText.textContent = 'Connected';
+                    addLogEntry('Video call connected with doctor.', 'success');
+                });
+                call.on('close', endVideoCall);
+            });
+            videoPeer.on('error', (err) => {
+                addLogEntry(`Video call error: ${err.message}`, 'error');
+            });
+        }
+
         startVideoCallBtn.addEventListener('click', async function() {
             videoCallContainer.style.display = 'flex';
 
@@ -2883,55 +2956,7 @@
                 }
             }
 
-            callStatusIndicator.style.backgroundColor = 'orange';
-            callStatusText.textContent = 'Connecting...';
-
-            // The drone registers as the callee under a fixed, well-known
-            // Peer ID derived from the shared pairing roomId -- the doctor
-            // side calls this exact ID directly once it has its own local
-            // stream ready. Peer IDs are alphanumeric-ish; sanitize to be
-            // safe since myRoomId can be a UUID (hyphens) or "solo_..."
-            // (underscore).
-            const peerId = 'drone_' + myRoomId.replace(/[^a-zA-Z0-9_-]/g, '');
-
-            try {
-                localVideoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            } catch (err) {
-                addLogEntry(`Camera/microphone access failed: ${err.message}`, 'error');
-                callStatusIndicator.style.backgroundColor = 'red';
-                callStatusText.textContent = 'Disconnected';
-                videoCallContainer.style.display = 'none';
-                return;
-            }
-            document.getElementById('local-video').srcObject = localVideoStream;
-
-            // A Peer object can only be used once, so tear down any
-            // previous one before a fresh call attempt in the same page.
-            if (videoPeer) {
-                videoPeer.destroy();
-                videoPeer = undefined;
-            }
-            videoPeer = new Peer(peerId);
-            videoPeer.on('open', () => {
-                callStatusText.textContent = 'Waiting for doctor to join...';
-                addLogEntry('Ready — waiting for the doctor to join the call.', 'info');
-            });
-            videoPeer.on('call', (call) => {
-                currentVideoCall = call;
-                call.answer(localVideoStream);
-                call.on('stream', (remoteStream) => {
-                    document.getElementById('remote-video').srcObject = remoteStream;
-                    callStatusIndicator.style.backgroundColor = 'green';
-                    callStatusText.textContent = 'Connected';
-                    addLogEntry('Video call connected with doctor.', 'success');
-                });
-                call.on('close', endVideoCall);
-            });
-            videoPeer.on('error', (err) => {
-                addLogEntry(`Video call error: ${err.message}`, 'error');
-            });
-
-            addLogEntry('Initiating video call with doctor...', 'info');
+            await ensureVideoPeerReady({ showUI: true });
         });
 
         function endVideoCall() {
@@ -3062,10 +3087,19 @@
             videoCallHeaderText.textContent = `Video Call with ${doctorName}`;
             addLogEntry(`Doctor ${doctorName} accepted your call and is now connected.`, 'success');
             if (pendingDoctorPairResolve) {
+                // The operator's own "Video Call Doctor" click is already
+                // waiting on this pairing and will set up the video peer
+                // itself right after this resolves -- don't also do it
+                // here to avoid two concurrent getUserMedia prompts.
                 pendingDoctorPairResolve();
                 pendingDoctorPairResolve = null;
                 pendingDoctorPairReject = null;
             } else {
+                // Self-initiated via the 108 button with nobody waiting on
+                // a manual video-call click -- register the video peer
+                // automatically so the doctor's side (which auto-dials the
+                // instant it accepts) doesn't retry into a void.
+                ensureVideoPeerReady({ showUI: false });
                 alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
             }
         });
@@ -3133,6 +3167,12 @@
                 localStorage.setItem('currentConnection', JSON.stringify(connection));
                 doctorName = launchDoctorName || doctorName;
                 videoCallHeaderText.textContent = `Video Call with ${doctorName}`;
+                // The doctor's side auto-dials this exact pairing's Peer ID
+                // the moment doctorAssignAndLaunch's callback resolves --
+                // register the answering peer now so that call succeeds
+                // immediately instead of retrying into a void until the
+                // operator happens to click "Video Call Doctor" themselves.
+                ensureVideoPeerReady({ showUI: false });
             }
             if (location) {
                 lastKnownLocation = location;
