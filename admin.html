@@ -11,13 +11,19 @@
             --primary: #e63946;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --accent-text: #1f7a80;
+            /* Darkened from #1f7a80 -- axe-core flagged the muted
+               empty-state text (".empty-note", opacity:0.8) as failing
+               WCAG AA's 4.5:1 threshold on white. Same teal, a shade
+               darker. */
+            --accent-text: #0d4d52;
             --light: #1a1a1a;
             --dark: #f5f7fa;
             --success: #2a9d8f;
             --warning: #e9c46a;
             --warning-text: #8a6d1a;
-            --danger: #e76f51;
+            /* Darkened from #e76f51 -- axe-core flagged the white-on-danger
+               Logout button as failing WCAG AA's 4.5:1 threshold. */
+            --danger: #c44a30;
         }
 
         * {

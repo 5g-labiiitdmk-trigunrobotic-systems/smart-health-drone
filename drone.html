@@ -27,6 +27,18 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
 <style>
+        /* Single source of truth for this banner's visibility: the
+           [hidden] attribute (toggled from JS via the .hidden property,
+           never via inline style.display) controls whether it shows at
+           all, and this rule supplies the flex layout only once it's
+           actually visible -- previously an inline style had both
+           display:none and display:flex on the same element, and the
+           later declaration silently won every time, leaving the banner
+           permanently visible regardless of the "hidden" intent. */
+        #remote-launch-banner:not([hidden]) {
+            display: flex;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -35,7 +47,11 @@
         }
         
         :root {
-            --primary: #e63946;
+            /* Darkened from #e63946 -- axe-core flagged the bold red
+               "AMBULANCE PATROL DRONE" heading and the Logout pill's red
+               text as failing WCAG AA's 4.5:1 threshold on their light
+               backgrounds. Same red, just a shade darker. */
+            --primary: #c22e39;
             --secondary: #1d3557;
             --accent: #a8dadc;
             --accent-text: #1f7a80;
@@ -287,7 +303,10 @@
         }
 
         .pill-status-online {
-            color: #2a9d3f;
+            /* Darkened from #2a9d3f -- combined with the pill subtext's
+               own opacity:0.85, the effective rendered color measured
+               well under the 4.5:1 WCAG AA threshold on white. */
+            color: #146023;
             display: flex;
             align-items: center;
             gap: 4px;
@@ -1395,9 +1414,61 @@
                 width: 100%;
             }
         }
+
+        /* Toast notifications -- replaces native alert() popups for
+           validation/status messages with an in-app, dismissible message
+           consistent with the rest of the UI. */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 360px;
+        }
+
+        .toast {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            border-left: 4px solid var(--accent-text);
+            font-size: 0.9rem;
+            color: var(--light);
+            animation: toast-in 0.2s ease-out;
+        }
+
+        .toast.toast-success { border-left-color: var(--success); }
+        .toast.toast-error { border-left-color: var(--primary); }
+
+        .toast-message {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9aa5b1;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0;
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
     </style>
 </head>
 <body>
+<div id="toast-container" aria-live="polite"></div>
 <div class="container">
 <header>
 <div class="logo">
@@ -1510,21 +1581,21 @@
 <span>SIMULATION CONTROLS</span>
 </div>
 <div class="control-group">
-<label class="control-label">Traffic Density</label>
+<label class="control-label" for="traffic-density">Traffic Density</label>
 <div class="slider-container">
 <input class="slider" id="traffic-density" max="100" min="1" type="range" value="65"/>
 <div class="value-display">65%</div>
 </div>
 </div>
 <div class="control-group">
-<label class="control-label">Drone Volume</label>
+<label class="control-label" for="drone-volume">Drone Volume</label>
 <div class="slider-container">
 <input class="slider" id="drone-volume" max="100" min="1" type="range" value="70"/>
 <div class="value-display">70%</div>
 </div>
 </div>
 <div class="control-group">
-<label class="control-label">Ambulance Speed</label>
+<label class="control-label" for="ambulance-speed">Ambulance Speed</label>
 <div class="slider-container">
 <input class="slider" id="ambulance-speed" max="100" min="1" type="range" value="40"/>
 <div class="value-display">40 km/h</div>
@@ -1612,7 +1683,7 @@
 <div class="iiit-logo">
 <i class="fas fa-university"></i>
 </div>
-<div id="remote-launch-banner" style="display:none; position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1200; background:linear-gradient(135deg, #ff8f6b, var(--danger)); color:#fff; padding:12px 22px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); font-weight:600; display:flex; align-items:center; gap:10px; max-width:90%; text-align:center;">
+<div id="remote-launch-banner" hidden style="position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1200; background:linear-gradient(135deg, #ff8f6b, var(--danger)); color:#fff; padding:12px 22px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); font-weight:600; align-items:center; gap:10px; max-width:90%; text-align:center;">
 <i class="fas fa-satellite-dish"></i>
 <span id="remote-launch-banner-text">Dispatched by doctor — mission starting</span>
 </div>
@@ -1828,6 +1899,30 @@
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
+    // Toast notifications -- replaces native alert() popups (manual
+    // location entry validation, autonomous-mode prerequisites) with an
+    // in-app, dismissible, non-blocking message.
+    function showToast(message, type = 'info', durationMs = 6000) {
+        const container = document.getElementById('toast-container');
+        if (!container) { console.log(message); return; }
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        const text = document.createElement('span');
+        text.className = 'toast-message';
+        text.textContent = message;
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'toast-close';
+        closeBtn.setAttribute('aria-label', 'Dismiss notification');
+        closeBtn.textContent = '×';
+        const remove = () => toast.remove();
+        closeBtn.addEventListener('click', remove);
+        toast.appendChild(text);
+        toast.appendChild(closeBtn);
+        container.appendChild(toast);
+        setTimeout(remove, durationMs);
+    }
+
     // Initialize variables
     let map;
     let ambulanceMarker, hospitalMarker, droneMarker;
@@ -2169,7 +2264,7 @@
             const lat = parseFloat(document.getElementById('manual-lat').value);
             const lng = parseFloat(document.getElementById('manual-lng').value);
             if (Number.isNaN(lat) || Number.isNaN(lng)) {
-                alert('Please enter valid latitude and longitude values.');
+                showToast('Please enter valid latitude and longitude values.', 'error');
                 return;
             }
             hideManualLocationModal();
@@ -2475,7 +2570,7 @@
 
         async function startAutonomousMode() {
             if (!lastKnownLocation) {
-                alert('Set a starting location first (Get Current Location) before enabling Autonomous Mode.');
+                showToast('Set a starting location first (Get Current Location) before enabling Autonomous Mode.', 'error');
                 return;
             }
 
@@ -3132,7 +3227,7 @@
                 // automatically so the doctor's side (which auto-dials the
                 // instant it accepts) doesn't retry into a void.
                 ensureVideoPeerReady({ showUI: false });
-                alert(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`);
+                showToast(`Doctor ${doctorName} has accepted your emergency call and is now monitoring this drone.`, 'success');
             }
         });
 
@@ -3149,10 +3244,10 @@
             const banner = document.getElementById('remote-launch-banner');
             const bannerText = document.getElementById('remote-launch-banner-text');
             bannerText.textContent = `Dispatched by Dr. ${launchedByDoctorName || 'Unknown'} — mission starting`;
-            banner.style.display = 'flex';
+            banner.hidden = false;
             clearTimeout(showRemoteLaunchBanner._hideTimer);
             showRemoteLaunchBanner._hideTimer = setTimeout(() => {
-                banner.style.display = 'none';
+                banner.hidden = true;
             }, 8000);
         }
 
