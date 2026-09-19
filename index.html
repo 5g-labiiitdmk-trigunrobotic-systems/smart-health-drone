@@ -1102,7 +1102,11 @@
             align-items: center;
             gap: 12px;
             margin: 20px 0;
-            color: #9aa5b1;
+            /* Was #9aa5b1 (~2.5:1 on white, fails WCAG AA's 4.5:1 for
+               small text) -- darkened within the same neutral-gray family
+               rather than switching to a themed color, since this is
+               meant to read as a quiet divider label, not an accent. */
+            color: #5f6b78;
             font-size: 0.8rem;
         }
 
@@ -1159,9 +1163,61 @@
             .auth-gate-title h1 { font-size: 2.2rem; }
             .auth-gate-features { display: none; }
         }
+
+        /* Toast notifications -- replaces native alert() popups, which are
+           jarring and visually inconsistent with the rest of the app, for
+           every success/error/info message this page shows. */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 360px;
+        }
+
+        .toast {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            border-left: 4px solid var(--accent-text);
+            font-size: 0.9rem;
+            color: var(--light);
+            animation: toast-in 0.2s ease-out;
+        }
+
+        .toast.toast-success { border-left-color: var(--success); }
+        .toast.toast-error { border-left-color: var(--primary); }
+
+        .toast-message {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9aa5b1;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0;
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
     </style>
 </head>
 <body>
+    <div id="toast-container" aria-live="polite"></div>
     <div id="authGateView" hidden></div>
 
     <div class="container" id="appContent" hidden>
@@ -1538,6 +1594,36 @@
 
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
+        // Expected admin-approval turnaround shown to a newly-registered
+        // user -- edit this one line if the real review process is faster
+        // or slower than 24 hours.
+        const APPROVAL_TIMEFRAME_TEXT = 'within 24 hours';
+
+        // Toast notifications -- replaces native alert() popups everywhere
+        // on this page (registration success/failure, password mismatch,
+        // login errors, network failures) with an in-app, dismissible,
+        // non-blocking message consistent with the rest of the UI.
+        function showToast(message, type = 'info', durationMs = 6000) {
+            const container = document.getElementById('toast-container');
+            if (!container) { console.log(message); return; }
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            const text = document.createElement('span');
+            text.className = 'toast-message';
+            text.textContent = message;
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.setAttribute('aria-label', 'Dismiss notification');
+            closeBtn.textContent = '×';
+            const remove = () => toast.remove();
+            closeBtn.addEventListener('click', remove);
+            toast.appendChild(text);
+            toast.appendChild(closeBtn);
+            container.appendChild(toast);
+            setTimeout(remove, durationMs);
+        }
+
         // Initialize Socket.IO client
         // Try connecting without specifying the full URL (let Socket.IO auto-detect)
 //const socket = io({
@@ -1603,7 +1689,7 @@
                                 <div class="auth-gate-input-group">
                                     <i class="fas fa-lock field-icon"></i>
                                     <input type="password" id="authGatePassword" placeholder="Password" autocomplete="current-password" required>
-                                    <button type="button" class="toggle-visibility" id="authGateToggleVisibility"><i class="fas fa-eye"></i></button>
+                                    <button type="button" class="toggle-visibility" id="authGateToggleVisibility" aria-label="Show password"><i class="fas fa-eye"></i></button>
                                 </div>
                             </div>
                             <button type="submit" class="auth-gate-submit" id="authGateSubmitBtn">
@@ -1660,13 +1746,16 @@
 
             document.getElementById('authGateToggleVisibility').addEventListener('click', () => {
                 const input = document.getElementById('authGatePassword');
-                const icon = document.querySelector('#authGateToggleVisibility i');
+                const toggleBtn = document.getElementById('authGateToggleVisibility');
+                const icon = toggleBtn.querySelector('i');
                 if (input.type === 'password') {
                     input.type = 'text';
                     icon.className = 'fas fa-eye-slash';
+                    toggleBtn.setAttribute('aria-label', 'Hide password');
                 } else {
                     input.type = 'password';
                     icon.className = 'fas fa-eye';
+                    toggleBtn.setAttribute('aria-label', 'Show password');
                 }
             });
 
@@ -2094,10 +2183,10 @@
                     localStorage.setItem('currentConnection', JSON.stringify(connection));
                     updateUIWithConnection(connection);
                 });
-                alert(`Doctor ${doctorName} connected to Drone ${selectedDrone}!`);
+                showToast(`Doctor ${doctorName} connected to Drone ${selectedDrone}!`, 'success');
                 closeAllModals();
             } else {
-                alert('Please select your name and a drone to connect to.');
+                showToast('Please select your name and a drone to connect to.', 'error');
             }
         });
 
@@ -2116,10 +2205,10 @@
                     localStorage.setItem('currentConnection', JSON.stringify(connection));
                     updateUIWithConnection(connection);
                 });
-                alert(`Drone Operator ${operatorName} connected to Doctor ${selectedDoctor}!`);
+                showToast(`Drone Operator ${operatorName} connected to Doctor ${selectedDoctor}!`, 'success');
                 closeAllModals();
             } else {
-                alert('Please select your name and a doctor to connect to.');
+                showToast('Please select your name and a doctor to connect to.', 'error');
             }
         });
 
@@ -2131,7 +2220,7 @@
             socket.emit('resetConnection', stored ? stored.roomId : null);
             localStorage.removeItem('currentConnection');
             resetServiceCards();
-            alert('Connection reset. You can now establish a new connection.');
+            showToast('Connection reset. You can now establish a new connection.', 'success');
         });
 
         // Close modal when clicking outside
@@ -2201,7 +2290,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    alert(data.error || 'Login failed.');
+                    showToast(data.error || 'Login failed.', 'error');
                     return;
                 }
                 localStorage.setItem('myUserId', data.user.userId);
@@ -2209,13 +2298,13 @@
                 localStorage.setItem('myName', data.user.name);
                 socket.emit('identify', { userId: data.user.userId, role: data.user.userType });
 
-                alert(`Welcome back, ${data.user.name}! Please select your role to connect.`);
+                showToast(`Welcome back, ${data.user.name}! Please select your role to connect.`, 'success');
                 loginModal.style.display = 'none';
                 document.getElementById('loginForm').reset();
                 userTypeModal.style.display = 'block';
             } catch (err) {
                 console.error('Login request failed:', err);
-                alert('Could not reach the server. Please try again.');
+                showToast('Could not reach the server. Please try again.', 'error');
             }
         });
 
@@ -2272,7 +2361,7 @@
             const regSpecialization = document.getElementById('regSpecialization').value;
 
             if (regPassword !== regConfirmPassword) {
-                alert('Passwords do not match!');
+                showToast('Passwords do not match!', 'error');
                 return;
             }
 
@@ -2304,16 +2393,20 @@
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    alert(data.error || 'Registration failed.');
+                    showToast(data.error || 'Registration failed.', 'error');
                     return;
                 }
 
-                alert(`Registration submitted! Your User ID is: ${regUserId}. Your registration is pending admin approval. You'll be able to log in once approved.`);
+                showToast(
+                    `Registration submitted! Your User ID is: ${regUserId}. Your registration is pending admin approval, typically reviewed ${APPROVAL_TIMEFRAME_TEXT} -- you'll be able to log in once approved.`,
+                    'success',
+                    9000
+                );
                 registerModal.style.display = 'none';
                 document.getElementById('registrationForm').reset();
             } catch (err) {
                 console.error('Registration request failed:', err);
-                alert('Could not reach the server. Please try again.');
+                showToast('Could not reach the server. Please try again.', 'error');
             }
         });
     </script>

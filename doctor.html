@@ -35,10 +35,16 @@
         }
 
         :root {
-            --primary: #e63946;
+            /* --primary and --accent-text were darkened from #e63946 /
+               #1f7a80 -- both read fine to the eye but measured under
+               WCAG AA's 4.5:1 text-contrast threshold on white/light
+               backgrounds (axe-core flagged Logout, End, Send, and the
+               muted status/empty-state text). Same hue family, just a
+               shade darker, so the palette reads the same. */
+            --primary: #c22e39;
             --secondary: #1d3557;
             --accent: #a8dadc;
-            --accent-text: #1f7a80;
+            --accent-text: #0d4d52;
             --light: #1a1a1a;
             --dark: #f5f7fa;
             --success: #2a9d8f;
@@ -220,6 +226,34 @@
             overflow: hidden;
             display: flex;
             gap: 4px;
+            position: relative;
+        }
+
+        /* Idle state shown until a call is actually connected -- without
+           this, the frame was just an empty black rectangle before any
+           call started, which reads as broken rather than "nothing is
+           happening yet". */
+        #video-call-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: #eef1f5;
+            color: #5b6472;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #video-call-placeholder i {
+            font-size: 2rem;
+            color: #9aa5b1;
+        }
+
+        #video-call-placeholder[hidden] {
+            display: none;
         }
 
         #remote-video,
@@ -438,9 +472,61 @@
                 font-size: 0.95rem;
             }
         }
+
+        /* Toast notifications -- replaces native alert() popups for
+           assignment/accept errors with an in-app, dismissible message
+           consistent with the rest of the UI. */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 360px;
+        }
+
+        .toast {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            border-left: 4px solid var(--accent-text);
+            font-size: 0.9rem;
+            color: var(--light);
+            animation: toast-in 0.2s ease-out;
+        }
+
+        .toast.toast-success { border-left-color: var(--success); }
+        .toast.toast-error { border-left-color: var(--primary); }
+
+        .toast-message {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9aa5b1;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0;
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
     </style>
 </head>
 <body>
+    <div id="toast-container" aria-live="polite"></div>
     <header>
         <div class="logo">
             <div class="header-brands">
@@ -486,14 +572,16 @@
             <strong>Select Drone &amp; Launch</strong>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <label for="assign-drone-select" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;">Select a drone operator to assign</label>
             <select id="assign-drone-select" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem; min-width:220px;">
                 <option value="">Loading available drones…</option>
             </select>
+            <label for="assign-incident-details" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;">Incident details (optional)</label>
             <input type="text" id="assign-incident-details" placeholder="Incident details (optional)" style="flex:1; min-width:200px; padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
             <button id="assign-launch-btn" style="padding:8px 18px; border:none; border-radius:8px; background: var(--success); color:#fff; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:8px;" disabled>
                 <i class="fas fa-paper-plane"></i> Assign &amp; Launch Drone
             </button>
-            <button id="refresh-drones-btn" title="Refresh drone list" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color: var(--accent-text); cursor:pointer;">
+            <button id="refresh-drones-btn" title="Refresh drone list" aria-label="Refresh drone list" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:transparent; color: var(--accent-text); cursor:pointer;">
                 <i class="fas fa-rotate"></i>
             </button>
         </div>
@@ -533,6 +621,10 @@
                     <button id="end-call-btn" style="padding:2px 10px; border:none; border-radius:6px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.8rem;">End</button>
                 </h3>
                 <div id="video-call-frame">
+                    <div id="video-call-placeholder">
+                        <i class="fas fa-video-slash"></i>
+                        <span>No active call</span>
+                    </div>
                     <video id="remote-video" autoplay playsinline></video>
                     <video id="local-video" autoplay playsinline muted></video>
                 </div>
@@ -556,7 +648,7 @@
                 </button>
             </div>
         </div>
-        <div class="console-content" id="console-content">
+        <div class="console-content" id="console-content" tabindex="0" role="log" aria-label="System console messages">
             <div class="log-entry">
                 <span class="log-timestamp">00:00:00</span>
                 <span class="log-message log-info">Doctor interface initialized. Waiting for drone connection...</span>
@@ -568,6 +660,30 @@
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script>
+        // Toast notifications -- replaces native alert() popups (e.g. a
+        // failed drone assignment/accept) with an in-app, dismissible,
+        // non-blocking message.
+        function showToast(message, type = 'info', durationMs = 6000) {
+            const container = document.getElementById('toast-container');
+            if (!container) { console.log(message); return; }
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            const text = document.createElement('span');
+            text.className = 'toast-message';
+            text.textContent = message;
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.setAttribute('aria-label', 'Dismiss notification');
+            closeBtn.textContent = '×';
+            const remove = () => toast.remove();
+            closeBtn.addEventListener('click', remove);
+            toast.appendChild(text);
+            toast.appendChild(closeBtn);
+            container.appendChild(toast);
+            setTimeout(remove, durationMs);
+        }
+
         // Initialize variables
         let map;
         let ambulanceMarker, droneMarker, droneAmbulanceLine;
@@ -767,7 +883,7 @@
         function acceptRequest(roomId) {
             socket.emit('acceptRequest', { roomId, doctorUserId: myUserId, doctorName }, (result) => {
                 if (result && result.error) {
-                    alert(result.error);
+                    showToast(result.error, 'error');
                     return;
                 }
                 activateConnection(result.connection, `Accepted emergency call from ${result.connection.operatorName}. Now receiving their live GPS and video feed.`);
@@ -808,7 +924,8 @@
                 }
                 assignLaunchBtn.disabled = !assignDroneSelect.value;
             } catch (err) {
-                addLogEntry(`Could not load available drones: ${err.message}`, 'error');
+                console.error('Could not load available drones:', err);
+                addLogEntry("Couldn't load the drone list right now — please try refreshing.", 'error');
             }
         }
 
@@ -830,7 +947,7 @@
                 incidentDetails: assignIncidentDetails.value.trim() || null
             }, (result) => {
                 if (result && result.error) {
-                    alert(result.error);
+                    showToast(result.error, 'error');
                     assignLaunchBtn.disabled = false;
                     return;
                 }
@@ -950,6 +1067,7 @@
                 return;
             }
             document.getElementById('local-video').srcObject = localVideoStream;
+            document.getElementById('video-call-placeholder').hidden = true;
 
             // A Peer object can only be used once, so tear down any
             // previous one before a fresh call attempt in the same page.
@@ -998,6 +1116,9 @@
                 localVideoStream.getTracks().forEach(track => track.stop());
                 localVideoStream = undefined;
             }
+            document.getElementById('remote-video').srcObject = null;
+            document.getElementById('local-video').srcObject = null;
+            document.getElementById('video-call-placeholder').hidden = false;
 
             // Ending the call ends the mission: tell the server so this
             // drone is freed up for the next assignment. Previously
