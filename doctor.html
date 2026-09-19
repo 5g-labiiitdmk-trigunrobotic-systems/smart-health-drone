@@ -605,6 +605,11 @@
         // in drone.html for the operator side).
         let myUserId = localStorage.getItem('myUserId') || null;
 
+        // A quick, cheap way to tell from the console log alone whether
+        // this tab is actually running the latest deployed JS, rather than
+        // a page loaded before a fix shipped and simply left open since.
+        addLogEntry(`Build check: doctor.html loaded at ${new Date().toLocaleTimeString()} (Assign & Launch + mission-reset build).`, 'info');
+
         if (currentConnection && currentConnection.role === 'doctor') {
             doctorName = currentConnection.doctorName;
             droneName = currentConnection.droneName;
