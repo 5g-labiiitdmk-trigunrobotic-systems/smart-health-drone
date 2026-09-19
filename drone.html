@@ -2772,11 +2772,23 @@
                 map.removeLayer(droneMarker);
                 map.removeLayer(droneGuidance);
                 addLogEntry('Drone returned and docked. Mission successful!', 'success');
-                
+
                 // Remove guide line
                 if (guideLine) {
                     map.removeLayer(guideLine);
                     guideLine = null;
+                }
+
+                // The mission completing here is the other natural
+                // "it's over" moment (the doctor clicking End is the
+                // other) -- tell the server so this drone is freed up for
+                // its next assignment instead of staying marked "assigned"
+                // indefinitely once a doctor had ever launched it.
+                if (myRoomId && !myRoomId.startsWith('solo_')) {
+                    socket.emit('resetConnection', myRoomId);
+                    addLogEntry('Mission marked complete. This drone is now available for a new assignment.', 'success');
+                    localStorage.removeItem('currentConnection');
+                    myRoomId = `solo_${Math.random().toString(36).slice(2)}`;
                 }
             });
         }

@@ -975,7 +975,26 @@
                 localVideoStream.getTracks().forEach(track => track.stop());
                 localVideoStream = undefined;
             }
-            addLogEntry('Video call ended.', 'info');
+
+            // Ending the call ends the mission: tell the server so this
+            // drone is freed up for the next assignment. Previously
+            // nothing in the UI ever emitted 'resetConnection', so any
+            // drone that had ever been assigned/launched once stayed
+            // permanently marked "assigned" -- invisible in the doctor's
+            // Assign & Launch panel and stuck showing "Paired" in the
+            // admin panel -- for the rest of the server's uptime, long
+            // after the actual mission was over. This was the real cause
+            // behind drones repeatedly showing as unavailable.
+            if (myRoomId && !myRoomId.startsWith('solo_')) {
+                socket.emit('resetConnection', myRoomId);
+                addLogEntry('Mission marked complete. Drone is now free for a new assignment.', 'success');
+                localStorage.removeItem('currentConnection');
+                myRoomId = `solo_${Math.random().toString(36).slice(2)}`;
+                droneName = 'Ambulance Drone';
+                videoCallTitleText.textContent = 'Emergency Video Call';
+            } else {
+                addLogEntry('Video call ended.', 'info');
+            }
         }
 
         // touchend fallback (with preventDefault, so the browser doesn't
