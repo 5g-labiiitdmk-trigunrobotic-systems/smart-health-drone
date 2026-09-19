@@ -1896,7 +1896,14 @@
         // a per-tab random id so testing without going through the portal
         // doesn't accidentally join a shared/global room.
         let myRoomId = (currentConnection && currentConnection.roomId) || `solo_${Math.random().toString(36).slice(2)}`;
-        const myUserId = localStorage.getItem('myUserId') || null;
+        // NOT a one-shot read: the auth-gate script at the top of <head>
+        // sets localStorage.myUserId asynchronously (it awaits a fetch to
+        // /api/me), and this script block can run before that fetch
+        // resolves -- capturing this as a `const` here would silently lock
+        // in `null` and this operator would never be identifiable to the
+        // server (showing permanently "offline" on the doctor's Assign &
+        // Launch panel despite being connected). Re-read it lazily instead.
+        let myUserId = localStorage.getItem('myUserId') || null;
 
         // Join this pairing's own room instead of a hardcoded global one, so
         // GPS/video data never crosses over between simultaneous drone/doctor pairs.
@@ -1905,8 +1912,17 @@
         // userId, so a doctor's "Assign & Launch" action can target this
         // exact socket instead of broadcasting (same lookup the doctor-side
         // accept-a-request flow already uses for room isolation).
+        // Every 'connect' (including a reconnect after a network blip) gets
+        // its own new socket.id server-side, so identify is re-sent
+        // unconditionally each time rather than only once -- otherwise the
+        // server's userId->socketId map would keep pointing at a dead
+        // socket after a reconnect, and this operator would look offline
+        // again despite the tab still being open and connected.
         const identifySelf = () => {
-            if (myUserId) socket.emit('identify', { userId: myUserId, role: 'drone_operator' });
+            myUserId = localStorage.getItem('myUserId') || myUserId;
+            if (myUserId) {
+                socket.emit('identify', { userId: myUserId, role: 'drone_operator' });
+            }
         };
         if (socket.connected) {
             joinMyRoom();
@@ -1916,6 +1932,19 @@
             joinMyRoom();
             identifySelf();
         });
+        // The auth-gate fetch can resolve after this script has already run
+        // (and after 'connect' has already fired), so myUserId may still be
+        // null at both of the call sites above. Keep retrying briefly until
+        // it's available, then stop -- this is the actual fix for the
+        // "shows offline on the doctor's panel" symptom.
+        const identifyRetryInterval = setInterval(() => {
+            if (myUserId) {
+                clearInterval(identifyRetryInterval);
+                return;
+            }
+            identifySelf();
+        }, 500);
+        setTimeout(() => clearInterval(identifyRetryInterval), 15000);
 
         // --- Real Drone Mode: hardware telemetry ingestion ---
         // Toggles between the existing simulated flight and live hardware
