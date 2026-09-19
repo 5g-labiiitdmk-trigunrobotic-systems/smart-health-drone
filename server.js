@@ -520,7 +520,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
     const users = (await db.loadUsers()).map(u => {
         const pub = toPublicUser(u);
         const pairing = Object.values(activeConnections).find(c =>
-            c.doctorUserId === u.userId || c.operatorUserId === u.userId ||
+            c.doctorUserId === u.userId || c.droneUserId === u.userId ||
             c.doctorName === u.userId || c.operatorName === u.userId
         );
         return {
@@ -782,6 +782,13 @@ io.on('connection', (socket) => {
         socket.data.userId = userId;
         socket.data.role = role;
         onlineUsers.set(userId, { socketId: socket.id, role });
+        // Pushes the doctor's "Select Drone & Launch" list, and the admin
+        // panel's Online/Offline user status, to update the moment someone
+        // actually comes online, instead of only on a periodic poll or a
+        // manual tab switch -- otherwise a drone/doctor that connects after
+        // those panels already loaded stays looking offline/unavailable
+        // until something else happens to trigger a refresh.
+        io.emit('droneAvailabilityChanged');
     });
 
     socket.on('join', (room) => {
@@ -1015,7 +1022,16 @@ io.on('connection', (socket) => {
         console.log(`User disconnected: ${socket.id}`);
 
         if (socket.data.userId) {
-            onlineUsers.delete(socket.data.userId);
+            // Only remove the entry if it still points at *this* socket --
+            // a reconnect can already have re-identified with a new
+            // socket.id by the time this old socket's disconnect fires,
+            // and deleting unconditionally would wrongly mark a still-online
+            // user as offline.
+            const current = onlineUsers.get(socket.data.userId);
+            if (current && current.socketId === socket.id) {
+                onlineUsers.delete(socket.data.userId);
+                io.emit('droneAvailabilityChanged');
+            }
         }
 
         // Drop any pending emergency request this socket raised but nobody

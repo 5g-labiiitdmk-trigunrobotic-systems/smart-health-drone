@@ -820,6 +820,11 @@
         refreshAvailableDrones();
         setInterval(refreshAvailableDrones, 15000);
         socket.on('currentConnectionStatus', refreshAvailableDrones);
+        // Pushed by the server the moment any user's online status changes
+        // (see server.js's 'identify'/'disconnect' handlers) -- without
+        // this, a drone that connects after this panel already loaded
+        // would stay invisible here until the 15s poll happened to catch it.
+        socket.on('droneAvailabilityChanged', refreshAvailableDrones);
 
         // --- Text message to drone (spoken aloud there via TTS) ---
         const doctorMessageInput = document.getElementById('doctor-message-input');
