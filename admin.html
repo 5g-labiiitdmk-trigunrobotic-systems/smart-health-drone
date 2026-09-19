@@ -1290,9 +1290,14 @@
         // Live-ish updates: refresh on relevant socket events instead of
         // blind polling, plus a slow periodic refresh as a safety net.
         const socket = io();
-        socket.on('currentConnectionStatus', () => { if (isLoggedIn) refreshConnections(); });
+        socket.on('currentConnectionStatus', () => { if (isLoggedIn) { refreshConnections(); refreshUsers(); } });
         socket.on('pendingRequestsUpdated', () => { if (isLoggedIn) refreshConnections(); });
         socket.on('newRegistrationPending', () => { if (isLoggedIn) refreshPendingApprovals(); });
+        // Live Online/Offline status in the Users tables, pushed the moment
+        // a doctor or drone operator's socket identifies itself or drops --
+        // previously this table only ever reflected a snapshot from
+        // whenever the tab happened to load or was manually switched to.
+        socket.on('droneAvailabilityChanged', () => { if (isLoggedIn) refreshUsers(); });
         setInterval(() => { if (isLoggedIn) refreshAll(); }, 15000);
 
         // Bootstrap: figure out whether to show setup, login, or the
