@@ -120,6 +120,9 @@ testfile6/
 ├── .gitignore         # Git ignore rules
 └── README.md          # This file
 
+**🛰️ Connecting a Real Drone**
+See [REAL_DRONE_GUIDE.md](REAL_DRONE_GUIDE.md) for step-by-step instructions on wiring up an actual drone/GPS source and operating it via drone.html's "Real Drone Mode", plus [hardware-adapters/README.md](hardware-adapters/README.md) for the adapter scripts themselves.
+
 **🎮 Simulation Controls**
 1.Drone Interface:
 Traffic Density Slider: Adjust simulated traffic conditions
