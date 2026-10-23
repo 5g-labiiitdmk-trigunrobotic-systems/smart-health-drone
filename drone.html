@@ -1629,7 +1629,20 @@
 <i class="fas fa-volume-up"></i> Enable Voice Alerts
 </button>
 </div>
+<div class="btn-group" style="margin-top: 10px;">
+<button class="btn btn-primary" id="test-speaker" style="grid-column: 1 / -1; min-height:44px;">
+<i class="fas fa-headphones"></i> Test Speaker
+</button>
+</div>
 <div id="voice-alerts-status" style="margin-top: 6px; font-size: 0.85rem; color: var(--accent-text);">Voice alerts: OFF - tap to enable</div>
+<div style="margin-top: 6px; font-size: 0.85rem; color: var(--accent-text);">
+<label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+<input type="checkbox" id="alert-chime-checkbox" checked style="width:16px; height:16px;">
+Alert chime
+</label>
+</div>
+<div style="margin-top: 6px; font-size: 0.8rem; color: var(--warning-text);">Set tablet media volume to maximum and check the speaker is connected.</div>
+<div id="audio-output-warning" hidden style="margin-top: 6px; font-size: 0.85rem; color: var(--danger); font-weight: 700;">Audio output changed - check the speaker</div>
 </div>
 <div class="control-panel">
 <div class="panel-title">
@@ -2112,6 +2125,7 @@
                 if (ambulanceInterval) clearInterval(ambulanceInterval);
                 if (typeof stopAutonomousMode === 'function') stopAutonomousMode();
                 isSimulationActive = false;
+                updateKeepAliveTone();
                 joinRealDroneRoom();
                 if (realDroneNoSignalInterval) clearInterval(realDroneNoSignalInterval);
                 realDroneNoSignalInterval = setInterval(updateRealDroneFreshnessUI, 1000);
@@ -2238,6 +2252,7 @@
             deployDroneBtn.disabled = true;
             emergencyModeBtn.disabled = true;
             isSimulationActive = false;
+            updateKeepAliveTone();
             hospitalInfo.style.display = 'none';
             addLogEntry('Path cleared. All markers removed.', 'info');
         }
@@ -2579,11 +2594,12 @@
         document.getElementById('enable-voice-alerts').addEventListener('click', unlockVoiceAlerts);
 
         document.getElementById('voice-locked-banner-btn').addEventListener('click', () => {
-            const text = pendingDoctorMessage;
+            const pending = pendingDoctorMessage;
             hideVoiceLockedBanner();
-            if (text) {
+            if (pending) {
                 markVoiceUnlocked();
-                speakAlert(text, {
+                speakDoctorMessage(pending.text, {
+                    urgent: pending.urgent,
                     onEnd: () => reportDoctorMessageStatus('spoken'),
                     onError: (reason) => {
                         showToast(`Voice failed: ${reason}`, 'error');
@@ -2850,6 +2866,7 @@
             voiceAlertsUnlocked = true;
             const statusEl = document.getElementById('voice-alerts-status');
             if (statusEl) statusEl.textContent = 'Voice alerts: ON';
+            updateKeepAliveTone();
         }
 
         function unlockVoiceAlerts() {
@@ -2864,8 +2881,8 @@
 
         let pendingDoctorMessage = null;
 
-        function showVoiceLockedBanner(text) {
-            pendingDoctorMessage = text;
+        function showVoiceLockedBanner(text, urgent) {
+            pendingDoctorMessage = { text, urgent };
             const banner = document.getElementById('voice-locked-banner');
             const bannerText = document.getElementById('voice-locked-banner-text');
             if (bannerText) bannerText.textContent = text;
@@ -2897,6 +2914,138 @@
             if (document.visibilityState === 'visible' && wakeLockActive) {
                 requestWakeLock();
             }
+        });
+
+        // --- Bluetooth speaker helpers ---------------------------------------
+        // A Bluetooth speaker often sleeps between sounds and clips the first
+        // second or so of the next one. A short attention chime plus a pause
+        // wakes the link before we actually speak, and a near-silent looping
+        // tone keeps the link alive for as long as voice alerts matter.
+        let sharedAudioContext = null;
+        function getSharedAudioContext() {
+            if (!sharedAudioContext) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (AC) sharedAudioContext = new AC();
+            }
+            return sharedAudioContext;
+        }
+
+        // Plays a two-tone, ~0.6s chime. 'urgent' uses a higher, different
+        // tone pair than the normal chime so an urgent message is
+        // distinguishable by ear. Calls onDone once playback should be over.
+        function playChime(kind, onDone) {
+            const ctx = getSharedAudioContext();
+            if (!ctx) {
+                if (onDone) onDone();
+                return;
+            }
+            const freqs = kind === 'urgent' ? [1200, 950] : [660, 880];
+            const now = ctx.currentTime;
+            freqs.forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const start = now + i * 0.3;
+                gain.gain.setValueAtTime(0.0001, start);
+                gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(start);
+                osc.stop(start + 0.3);
+            });
+            setTimeout(() => { if (onDone) onDone(); }, 600);
+        }
+
+        function isChimeEnabled() {
+            const checkbox = document.getElementById('alert-chime-checkbox');
+            return !checkbox || checkbox.checked;
+        }
+
+        // Speaks a doctor message with the Bluetooth wake-up lead-in (chime +
+        // ~800ms pause) ahead of it, repeating twice with a 2s gap when urgent.
+        function speakDoctorMessage(text, { urgent, onEnd, onError } = {}) {
+            const chimeKind = urgent ? 'urgent' : 'normal';
+
+            function doSpeak() {
+                speakAlert(text, {
+                    onEnd: () => {
+                        if (urgent) {
+                            setTimeout(() => speakAlert(text, { onEnd, onError }), 2000);
+                        } else if (onEnd) {
+                            onEnd();
+                        }
+                    },
+                    onError
+                });
+            }
+
+            if (isChimeEnabled()) {
+                playChime(chimeKind, () => setTimeout(doSpeak, 800));
+            } else {
+                doSpeak();
+            }
+        }
+
+        // Near-silent (gain 0.001) looping tone that keeps the Bluetooth link
+        // active. Uses its own gain node on the shared AudioContext so it
+        // never raises the overall output level enough to be heard, and
+        // never touches the PeerJS call's own audio element/stream.
+        let keepAliveOscillator = null;
+        let keepAliveGain = null;
+
+        function startKeepAliveTone() {
+            if (keepAliveOscillator) return;
+            const ctx = getSharedAudioContext();
+            if (!ctx) return;
+            keepAliveOscillator = ctx.createOscillator();
+            keepAliveGain = ctx.createGain();
+            keepAliveOscillator.type = 'sine';
+            keepAliveOscillator.frequency.value = 20000;
+            keepAliveGain.gain.value = 0.001;
+            keepAliveOscillator.connect(keepAliveGain);
+            keepAliveGain.connect(ctx.destination);
+            keepAliveOscillator.start();
+        }
+
+        function stopKeepAliveTone() {
+            if (keepAliveOscillator) {
+                try { keepAliveOscillator.stop(); } catch (err) { /* already stopped */ }
+                keepAliveOscillator.disconnect();
+                keepAliveGain.disconnect();
+            }
+            keepAliveOscillator = null;
+            keepAliveGain = null;
+        }
+
+        // Keep-alive should run exactly while voice alerts are unlocked AND
+        // a mission/simulation is active; called after either condition changes.
+        function updateKeepAliveTone() {
+            if (voiceAlertsUnlocked && isSimulationActive) {
+                startKeepAliveTone();
+            } else {
+                stopKeepAliveTone();
+            }
+        }
+
+        // Browsers cannot route speechSynthesis to a specific output device,
+        // so we never attempt setSinkId for speech -- it always follows the
+        // tablet's current output (the Bluetooth speaker, once connected).
+        // All we can do is notice when the set of outputs changes and warn.
+        if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                const warning = document.getElementById('audio-output-warning');
+                if (warning) warning.hidden = false;
+                addLogEntry('Audio output changed - check the speaker', 'alert');
+            });
+        }
+
+        document.getElementById('test-speaker').addEventListener('click', () => {
+            unlockVoiceAlerts();
+            speakDoctorMessage('Speaker test, can you hear this?', {
+                onError: (reason) => showToast(`Voice failed: ${reason}`, 'error')
+            });
         });
 
         // Create drone guide line
@@ -3088,6 +3237,7 @@
             emergencyModeBtn.disabled = false;
             addLogEntry('Simulation started. Ready to deploy drone.', 'info');
             requestWakeLock();
+            updateKeepAliveTone();
         }
         
         // Add log entry to console
@@ -3382,7 +3532,7 @@
 
         socket.on('doctorMessage', (data) => {
             if (!data || !data.text) return;
-            addLogEntry(`📩 Doctor: "${data.text}"`, 'alert');
+            addLogEntry(`📩 Doctor: "${data.text}"`, data.urgent ? 'error' : 'alert');
             currentDoctorMessageId = data.id || null;
             socket.emit('doctorMessageStatus', {
                 roomId: myRoomId,
@@ -3391,12 +3541,13 @@
             });
 
             if (!voiceAlertsUnlocked) {
-                showVoiceLockedBanner(data.text);
+                showVoiceLockedBanner(data.text, data.urgent);
                 reportDoctorMessageStatus('failed', 'voice locked');
                 return;
             }
 
-            speakAlert(data.text, {
+            speakDoctorMessage(data.text, {
+                urgent: data.urgent,
                 onEnd: () => reportDoctorMessageStatus('spoken'),
                 onError: (reason) => {
                     showToast(`Voice failed: ${reason}`, 'error');

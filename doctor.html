@@ -634,8 +634,12 @@
                     <button class="quick-doctor-message" data-text="Return to base" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Return to base</button>
                     <button class="quick-doctor-message" data-text="Stand by for instructions" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Stand by for instructions</button>
                 </div>
-                <div style="display:flex; gap:8px; margin-top:10px;">
+                <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
                     <input type="text" id="doctor-message-input" placeholder="Type a message for the drone to hear..." style="flex:1; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; color:var(--dark); cursor:pointer; white-space:nowrap;">
+                        <input type="checkbox" id="doctor-message-urgent" style="width:16px; height:16px;">
+                        Urgent
+                    </label>
                     <button id="doctor-message-send" disabled style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
                 </div>
             </div>
@@ -995,8 +999,10 @@
             text = (text !== undefined ? text : doctorMessageInput.value).trim();
             if (!text) return;
             const id = newDoctorMessageId();
-            socket.emit('doctorMessage', { roomId: myRoomId, text, id });
-            const logMessage = addLogEntry(`Message to drone: "${text}" — Sent`, 'info');
+            const urgentCheckbox = document.getElementById('doctor-message-urgent');
+            const urgent = !!(urgentCheckbox && urgentCheckbox.checked);
+            socket.emit('doctorMessage', { roomId: myRoomId, text, id, urgent });
+            const logMessage = addLogEntry(`Message to drone: "${text}"${urgent ? ' (URGENT)' : ''} — Sent`, urgent ? 'alert' : 'info');
             const timeoutId = setTimeout(() => {
                 if (doctorMessageStatusEls[id] && doctorMessageStatusEls[id].lastStatus === 'Sent') {
                     setDoctorMessageStatus(id, 'No response from drone');
