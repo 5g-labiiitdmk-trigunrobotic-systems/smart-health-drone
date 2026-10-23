@@ -893,6 +893,15 @@ io.on('connection', (socket) => {
         socket.to(data.roomId).emit('doctorMessage', data);
     });
 
+    // --- Drone -> doctor delivery confirmation for a doctorMessage ---
+    // Same room-scoped relay pattern as doctorMessage above.
+    socket.on('doctorMessageStatus', (data) => {
+        if (!data || !data.roomId || !data.status) {
+            return;
+        }
+        socket.to(data.roomId).emit('doctorMessageStatus', data);
+    });
+
     // --- Emergency call queue: a drone raises a request, an available ---
     // --- doctor accepts it, rather than doctors self-selecting a call. ---
     socket.on('requestEmergency', async (data = {}) => {

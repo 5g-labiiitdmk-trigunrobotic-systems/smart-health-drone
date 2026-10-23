@@ -628,9 +628,19 @@
                     <video id="remote-video" autoplay playsinline></video>
                     <video id="local-video" autoplay playsinline muted></video>
                 </div>
-                <div style="display:flex; gap:8px; margin-top:10px;">
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <button class="quick-doctor-message" data-text="Land immediately" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Land immediately</button>
+                    <button class="quick-doctor-message" data-text="Hold position" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Hold position</button>
+                    <button class="quick-doctor-message" data-text="Return to base" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Return to base</button>
+                    <button class="quick-doctor-message" data-text="Stand by for instructions" style="padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; background:var(--light); color:var(--dark); cursor:pointer; font-size:0.85rem;">Stand by for instructions</button>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
                     <input type="text" id="doctor-message-input" placeholder="Type a message for the drone to hear..." style="flex:1; padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px; font-size:0.9rem;">
-                    <button id="doctor-message-send" style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
+                    <label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; color:var(--dark); cursor:pointer; white-space:nowrap;">
+                        <input type="checkbox" id="doctor-message-urgent" style="width:16px; height:16px;">
+                        Urgent
+                    </label>
+                    <button id="doctor-message-send" disabled style="padding:8px 16px; border:none; border-radius:8px; background:var(--primary); color:#fff; cursor:pointer; font-size:0.9rem;">Send</button>
                 </div>
             </div>
         </section>
@@ -969,16 +979,63 @@
         // --- Text message to drone (spoken aloud there via TTS) ---
         const doctorMessageInput = document.getElementById('doctor-message-input');
         const doctorMessageSend = document.getElementById('doctor-message-send');
-        function sendDoctorMessage() {
-            const text = doctorMessageInput.value.trim();
-            if (!text) return;
-            socket.emit('doctorMessage', { roomId: myRoomId, text });
-            addLogEntry(`Message sent to drone: "${text}"`, 'info');
-            doctorMessageInput.value = '';
+        const doctorMessageStatusEls = {};
+
+        function newDoctorMessageId() {
+            if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+            doctorMessageCounter += 1;
+            return `${Date.now()}-${doctorMessageCounter}`;
         }
-        doctorMessageSend.addEventListener('click', sendDoctorMessage);
+        let doctorMessageCounter = 0;
+
+        function setDoctorMessageStatus(id, statusLabel) {
+            const entry = doctorMessageStatusEls[id];
+            if (!entry) return;
+            entry.lastStatus = statusLabel;
+            entry.logMessage.textContent = `Message to drone: "${entry.messageText}" — ${statusLabel}`;
+        }
+
+        function sendDoctorMessage(text) {
+            text = (text !== undefined ? text : doctorMessageInput.value).trim();
+            if (!text) return;
+            const id = newDoctorMessageId();
+            const urgentCheckbox = document.getElementById('doctor-message-urgent');
+            const urgent = !!(urgentCheckbox && urgentCheckbox.checked);
+            socket.emit('doctorMessage', { roomId: myRoomId, text, id, urgent });
+            const logMessage = addLogEntry(`Message to drone: "${text}"${urgent ? ' (URGENT)' : ''} — Sent`, urgent ? 'alert' : 'info');
+            const timeoutId = setTimeout(() => {
+                if (doctorMessageStatusEls[id] && doctorMessageStatusEls[id].lastStatus === 'Sent') {
+                    setDoctorMessageStatus(id, 'No response from drone');
+                }
+            }, 8000);
+            doctorMessageStatusEls[id] = { logMessage, messageText: text, timeoutId, lastStatus: 'Sent' };
+            doctorMessageInput.value = '';
+            doctorMessageSend.disabled = true;
+        }
+
+        socket.on('doctorMessageStatus', (data) => {
+            if (!data || !data.id) return;
+            const entry = doctorMessageStatusEls[data.id];
+            if (!entry) return;
+            clearTimeout(entry.timeoutId);
+            if (data.status === 'received') {
+                setDoctorMessageStatus(data.id, 'Received by drone');
+            } else if (data.status === 'spoken') {
+                setDoctorMessageStatus(data.id, 'Spoken');
+            } else if (data.status === 'failed') {
+                setDoctorMessageStatus(data.id, `Not played: ${data.reason || 'unknown reason'}`);
+            }
+        });
+
+        doctorMessageSend.addEventListener('click', () => sendDoctorMessage());
         doctorMessageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') sendDoctorMessage();
+        });
+        doctorMessageInput.addEventListener('input', () => {
+            doctorMessageSend.disabled = !doctorMessageInput.value.trim();
+        });
+        document.querySelectorAll('.quick-doctor-message').forEach((btn) => {
+            btn.addEventListener('click', () => sendDoctorMessage(btn.dataset.text));
         });
 
         socket.on('droneData', (data) => {
@@ -1180,6 +1237,7 @@
 
             consoleContent.appendChild(logEntry);
             consoleContent.scrollTop = consoleContent.scrollHeight;
+            return logMessage;
         }
 
         // --- Simulation Time Update ---
