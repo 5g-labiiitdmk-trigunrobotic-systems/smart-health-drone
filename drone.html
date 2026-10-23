@@ -39,6 +39,12 @@
             display: flex;
         }
 
+        /* Same pattern as #remote-launch-banner above: [hidden] alone
+           controls visibility, this rule only supplies the flex layout. */
+        #voice-locked-banner:not([hidden]) {
+            display: flex;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -1618,6 +1624,12 @@
     <div>ETA: <span id="autonomous-eta">-</span> min</div>
     <div>Distance remaining: <span id="autonomous-distance-remaining">-</span> km</div>
 </div>
+<div class="btn-group" style="margin-top: 10px;">
+<button class="btn btn-success" id="enable-voice-alerts" style="grid-column: 1 / -1; min-height:44px;">
+<i class="fas fa-volume-up"></i> Enable Voice Alerts
+</button>
+</div>
+<div id="voice-alerts-status" style="margin-top: 6px; font-size: 0.85rem; color: var(--accent-text);">Voice alerts: OFF - tap to enable</div>
 </div>
 <div class="control-panel">
 <div class="panel-title">
@@ -1686,6 +1698,11 @@
 <div id="remote-launch-banner" hidden style="position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1200; background:linear-gradient(135deg, #ff8f6b, var(--danger)); color:#fff; padding:12px 22px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); font-weight:600; align-items:center; gap:10px; max-width:90%; text-align:center;">
 <i class="fas fa-satellite-dish"></i>
 <span id="remote-launch-banner-text">Dispatched by doctor — mission starting</span>
+</div>
+<div id="voice-locked-banner" hidden style="position:absolute; top:70px; left:50%; transform:translateX(-50%); z-index:1200; background:linear-gradient(135deg, #ff8f6b, var(--danger)); color:#fff; padding:12px 22px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.25); font-weight:600; align-items:center; gap:10px; max-width:90%; text-align:center;">
+<i class="fas fa-volume-mute"></i>
+<span id="voice-locked-banner-text">Doctor message received</span>
+<button id="voice-locked-banner-btn" style="background:#fff; color:var(--danger); border:none; border-radius:8px; padding:8px 14px; font-weight:700; cursor:pointer; min-height:44px;">Tap to hear</button>
 </div>
 <div class="gps-indicator" id="gps-indicator">
 <i class="fas fa-satellite gps-icon"></i>
@@ -2559,6 +2576,29 @@
         // and animates the drone along it automatically, updating ETA and
         // distance-remaining as it flies. Manual override (Clear Path, or
         // acquiring a new location) always stops it immediately.
+        document.getElementById('enable-voice-alerts').addEventListener('click', unlockVoiceAlerts);
+
+        document.getElementById('voice-locked-banner-btn').addEventListener('click', () => {
+            const text = pendingDoctorMessage;
+            hideVoiceLockedBanner();
+            if (text) {
+                markVoiceUnlocked();
+                speakAlert(text, {
+                    onEnd: () => reportDoctorMessageStatus('spoken'),
+                    onError: (reason) => {
+                        showToast(`Voice failed: ${reason}`, 'error');
+                        reportDoctorMessageStatus('failed', reason);
+                    }
+                });
+            }
+        });
+
+        // One tap anywhere on the page primes speech synthesis.
+        document.addEventListener('click', function primeVoiceOnFirstTap() {
+            unlockVoiceAlerts();
+            document.removeEventListener('click', primeVoiceOnFirstTap);
+        }, { once: true });
+
         document.getElementById('autonomous-mode-toggle').addEventListener('click', function() {
             if (autonomousModeActive) {
                 stopAutonomousMode();
@@ -2719,19 +2759,146 @@
             return deg * (Math.PI/180);
         }
         
+        // --- Shared speech-synthesis helpers -------------------------------
+        let voiceAlertsUnlocked = false;
+        let cachedVoices = [];
+        if ('speechSynthesis' in window) {
+            cachedVoices = speechSynthesis.getVoices();
+            speechSynthesis.addEventListener('voiceschanged', () => {
+                cachedVoices = speechSynthesis.getVoices();
+            });
+        }
+
+        function getSelectedVoiceLang() {
+            const sel = document.getElementById('doctor-language-select') || document.getElementById('language-select');
+            return (sel && sel.value) ? sel.value : 'en-IN';
+        }
+
+        function pickVoiceForLang(lang) {
+            if (!cachedVoices.length) return null;
+            const exact = cachedVoices.find(v => v.lang === lang);
+            if (exact) return exact;
+            const prefix = lang.split('-')[0];
+            const prefixMatch = cachedVoices.find(v => v.lang && v.lang.split('-')[0] === prefix);
+            if (prefixMatch) return prefixMatch;
+            const english = cachedVoices.find(v => v.lang && v.lang.split('-')[0] === 'en');
+            if (english) return english;
+            return cachedVoices.find(v => v.default) || cachedVoices[0] || null;
+        }
+
+        function splitTextForSpeech(text) {
+            if (text.length <= 180) return [text];
+            const sentences = text.match(/[^.!?]+[.!?]+|\S+$/g) || [text];
+            const chunks = [];
+            let current = '';
+            for (const sentence of sentences) {
+                if ((current + sentence).length > 180 && current) {
+                    chunks.push(current.trim());
+                    current = '';
+                }
+                current += sentence;
+            }
+            if (current.trim()) chunks.push(current.trim());
+            return chunks;
+        }
+
+        // Speaks text using shared settings (rate/pitch/volume/voice/lang),
+        // chunking long text and reporting success/failure via callbacks.
+        function speakAlert(text, { onEnd, onError } = {}) {
+            if (!('speechSynthesis' in window)) {
+                if (onError) onError('speechSynthesis unsupported');
+                return;
+            }
+            if (speechSynthesis.speaking && !speechSynthesis.pending) {
+                // Only cancel if speech appears stuck (not actively queued).
+            }
+            const lang = getSelectedVoiceLang();
+            const voice = pickVoiceForLang(lang);
+            const chunks = splitTextForSpeech(text);
+            let errored = false;
+
+            const speakChunk = (index) => {
+                if (index >= chunks.length) {
+                    if (!errored && onEnd) onEnd();
+                    return;
+                }
+                const utterance = new SpeechSynthesisUtterance(chunks[index]);
+                utterance.rate = 0.95;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                utterance.lang = lang;
+                if (voice) utterance.voice = voice;
+                utterance.onend = () => speakChunk(index + 1);
+                utterance.onerror = (event) => {
+                    errored = true;
+                    if (onError) onError((event && event.error) || 'unknown speech error');
+                };
+                speechSynthesis.speak(utterance);
+            };
+            speakChunk(0);
+        }
+
         // Play voice alert
         function playVoiceAlert() {
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(
-                    "Emergency! Ambulance approaching! Please move aside!"
-                );
-                utterance.rate = 1.2;
-                utterance.pitch = 1.1;
-                utterance.volume = 1;
-                speechSynthesis.speak(utterance);
+            speakAlert("Emergency! Ambulance approaching! Please move aside!", {
+                onError: (reason) => showToast(`Voice failed: ${reason}`, 'error')
+            });
+        }
+
+        function markVoiceUnlocked() {
+            if (voiceAlertsUnlocked) return;
+            voiceAlertsUnlocked = true;
+            const statusEl = document.getElementById('voice-alerts-status');
+            if (statusEl) statusEl.textContent = 'Voice alerts: ON';
+        }
+
+        function unlockVoiceAlerts() {
+            const wasUnlocked = voiceAlertsUnlocked;
+            markVoiceUnlocked();
+            if (!wasUnlocked) {
+                speakAlert('Voice alerts enabled', {
+                    onError: (reason) => showToast(`Voice failed: ${reason}`, 'error')
+                });
             }
         }
-        
+
+        let pendingDoctorMessage = null;
+
+        function showVoiceLockedBanner(text) {
+            pendingDoctorMessage = text;
+            const banner = document.getElementById('voice-locked-banner');
+            const bannerText = document.getElementById('voice-locked-banner-text');
+            if (bannerText) bannerText.textContent = text;
+            if (banner) banner.hidden = false;
+        }
+
+        function hideVoiceLockedBanner() {
+            const banner = document.getElementById('voice-locked-banner');
+            if (banner) banner.hidden = true;
+            pendingDoctorMessage = null;
+        }
+
+        // --- Screen wake lock ------------------------------------------------
+        let wakeLockSentinel = null;
+        let wakeLockActive = false;
+
+        async function requestWakeLock() {
+            wakeLockActive = true;
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLockSentinel = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                // Not supported or denied; nothing more we can do.
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && wakeLockActive) {
+                requestWakeLock();
+            }
+        });
+
         // Create drone guide line
         function createGuideLine(from, to) {
             // Remove any existing guide line
@@ -2920,6 +3087,7 @@
             deployDroneBtn.disabled = false;
             emergencyModeBtn.disabled = false;
             addLogEntry('Simulation started. Ready to deploy drone.', 'info');
+            requestWakeLock();
         }
         
         // Add log entry to console
@@ -3050,6 +3218,7 @@
                     callStatusIndicator.style.backgroundColor = 'green';
                     callStatusText.textContent = 'Connected';
                     addLogEntry('Video call connected with doctor.', 'success');
+                    requestWakeLock();
                 });
                 call.on('close', endVideoCall);
             });
@@ -3199,12 +3368,41 @@
 
         // --- Text message from doctor, spoken aloud via the browser's ---
         // --- built-in Speech Synthesis API (no server-side TTS needed). ---
+        function reportDoctorMessageStatus(status, reason) {
+            if (!currentDoctorMessageId) return;
+            socket.emit('doctorMessageStatus', {
+                roomId: myRoomId,
+                id: currentDoctorMessageId,
+                status,
+                reason
+            });
+        }
+
+        let currentDoctorMessageId = null;
+
         socket.on('doctorMessage', (data) => {
             if (!data || !data.text) return;
             addLogEntry(`📩 Doctor: "${data.text}"`, 'alert');
-            if (window.speechSynthesis) {
-                window.speechSynthesis.speak(new SpeechSynthesisUtterance(data.text));
+            currentDoctorMessageId = data.id || null;
+            socket.emit('doctorMessageStatus', {
+                roomId: myRoomId,
+                id: data.id,
+                status: 'received'
+            });
+
+            if (!voiceAlertsUnlocked) {
+                showVoiceLockedBanner(data.text);
+                reportDoctorMessageStatus('failed', 'voice locked');
+                return;
             }
+
+            speakAlert(data.text, {
+                onEnd: () => reportDoctorMessageStatus('spoken'),
+                onError: (reason) => {
+                    showToast(`Voice failed: ${reason}`, 'error');
+                    reportDoctorMessageStatus('failed', reason);
+                }
+            });
         });
 
         socket.on('assignedDoctor', (connection) => {
